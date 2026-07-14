@@ -14,8 +14,6 @@ import { motion } from "framer-motion";
  *   paper     #F4F2EE   paperDim #E4E1D9   mute      #6F6C78
  */
 
-<script src="https://<your-render-url>/widget.js" data-client-id="placeholder"></script>
-
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
   whileInView: { opacity: 1, y: 0 },
