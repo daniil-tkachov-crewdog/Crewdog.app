@@ -1,7 +1,9 @@
 // src/components/run/ResultsCard.tsx
 import { useState } from "react";
-import { motion } from "framer-motion";
-import { Copy, Check } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Copy, Check, Loader2 } from "lucide-react";
+
+import { lookupContactDetails } from "@/services/contactDetails";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -60,27 +62,89 @@ function ContactRow({
   href?: string;
   cta: string;
 }) {
+  // Contact-details lookup state. Once we leave "idle", the button is inert:
+  // the details stay visible, no re-fetch and no collapse.
+  type State = "idle" | "loading" | "success" | "error";
+  const [state, setState] = useState<State>("idle");
+  const [payload, setPayload] = useState("");
+
+  async function handleContactDetails() {
+    if (state !== "idle" || !href) return;
+    setState("loading");
+    const result = await lookupContactDetails(href);
+    if (result.status === "success") {
+      setPayload(result.phone);
+      setState("success");
+    } else {
+      setPayload(result.message);
+      setState("error");
+    }
+  }
+
   return (
-    <div className="flex items-center gap-4 border-t border-[#E4E1D9] py-4 first:border-t-0">
-      <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full border border-[#E4E1D9] bg-[#F4F2EE] font-['IBM_Plex_Mono',monospace] text-[14px] font-semibold text-[#FF5A1F]">
-        {getInitials(name)}
-      </div>
-      <div className="min-w-0">
-        <div className="truncate text-[15px] font-semibold tracking-[-0.01em]">
-          {name}
+    <div className="border-t border-[#E4E1D9] py-4 first:border-t-0">
+      <div className="flex items-center gap-4">
+        <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full border border-[#E4E1D9] bg-[#F4F2EE] font-['IBM_Plex_Mono',monospace] text-[14px] font-semibold text-[#FF5A1F]">
+          {getInitials(name)}
         </div>
-        {sub && <div className="truncate text-[13px] text-[#55525E]">{sub}</div>}
+        <div className="min-w-0">
+          <div className="truncate text-[15px] font-semibold tracking-[-0.01em]">
+            {name}
+          </div>
+          {sub && (
+            <div className="truncate text-[13px] text-[#55525E]">{sub}</div>
+          )}
+        </div>
+        {href && (
+          <div className="ml-auto flex flex-shrink-0 flex-col items-stretch gap-2">
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="whitespace-nowrap rounded-[2px] border border-[#FF5A1F]/[0.35] px-3 py-[7px] text-center font-['IBM_Plex_Mono',monospace] text-[11px] tracking-[0.06em] text-[#FF5A1F] transition-colors hover:bg-[#FF5A1F]/[0.08]"
+            >
+              {cta} ↗
+            </a>
+            <button
+              type="button"
+              onClick={handleContactDetails}
+              disabled={state !== "idle"}
+              className="whitespace-nowrap rounded-[2px] border border-[#FF5A1F]/[0.35] px-3 py-[7px] text-center font-['IBM_Plex_Mono',monospace] text-[11px] tracking-[0.06em] text-[#FF5A1F] transition-colors hover:bg-[#FF5A1F]/[0.08] disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent"
+            >
+              Contact Details
+            </button>
+          </div>
+        )}
       </div>
-      {href && (
-        <a
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="ml-auto whitespace-nowrap rounded-[2px] border border-[#FF5A1F]/[0.35] px-3 py-[7px] font-['IBM_Plex_Mono',monospace] text-[11px] tracking-[0.06em] text-[#FF5A1F] transition-colors hover:bg-[#FF5A1F]/[0.08]"
-        >
-          {cta} ↗
-        </a>
-      )}
+
+      <AnimatePresence initial={false}>
+        {state !== "idle" && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+            className="overflow-hidden"
+          >
+            <div className="mt-3 pl-[60px] text-[13px]">
+              {state === "loading" && (
+                <span className="inline-flex items-center gap-2 text-[#55525E]">
+                  Looking up for contact details…
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                </span>
+              )}
+              {state === "success" && (
+                <span className="font-['IBM_Plex_Mono',monospace] font-semibold text-[#0B0B0F]">
+                  {payload}
+                </span>
+              )}
+              {state === "error" && (
+                <span className="text-[#B42318]">{payload}</span>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

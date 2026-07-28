@@ -85,6 +85,13 @@ const rawCvWebhook =
   "https://crewdog.app.n8n.cloud/webhook/eb31b6d7-7bac-4ed0-a177-6676898d3ec8";
 export const N8N_CV_WEBHOOK = ensureHttpsInProd(normalizeBase(rawCvWebhook));
 
+const rawContactDetails =
+  env.VITE_N8N_CONTACT_DETAILS_WEBHOOK?.trim?.() ||
+  "https://crewdog.app.n8n.cloud/webhook/40ce659f-83c8-4a59-9e9a-983fb424feee";
+export const N8N_CONTACT_DETAILS_WEBHOOK = ensureHttpsInProd(
+  normalizeBase(rawContactDetails)
+);
+
 // Prod guardrails: flag obvious misconfig early (console only)
 const IS_PROD_LIKE = isBrowser && !isLocalHost;
 
