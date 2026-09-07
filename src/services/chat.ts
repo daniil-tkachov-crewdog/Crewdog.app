@@ -70,6 +70,12 @@ export async function addMessage(
   return data;
 }
 
+// Deletes a conversation. Its messages are removed too via the ON DELETE CASCADE FK.
+export async function deleteChat(chatId: string): Promise<void> {
+  const { error } = await supabase.from("app_chats").delete().eq("id", chatId);
+  if (error) throw error;
+}
+
 export async function renameChat(chatId: string, title: string): Promise<void> {
   const { error } = await supabase
     .from("app_chats")

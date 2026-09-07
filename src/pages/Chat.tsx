@@ -2,6 +2,7 @@ import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { toast } from "sonner";
+import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -9,6 +10,7 @@ import {
   listMessages,
   createChat,
   addMessage,
+  deleteChat,
 } from "@/services/chat";
 import {
   DropdownMenu,
@@ -231,6 +233,26 @@ const Chat: React.FC = () => {
     setActiveId(conv.id);
   };
 
+  const removeChat = async (conv: Conversation) => {
+    const dbId = conv.dbId ?? dbIds.current[conv.id];
+    // Optimistically drop it from the sidebar; keep at least one chat around.
+    setConversations((prev) => {
+      const next = prev.filter((c) => c.id !== conv.id);
+      const list = next.length ? next : [newConversation()];
+      if (activeId === conv.id) setActiveId(list[0].id);
+      return list;
+    });
+    delete dbIds.current[conv.id];
+    delete creating.current[conv.id];
+    if (!dbId) return; // never persisted, nothing to delete
+    try {
+      await deleteChat(dbId);
+    } catch (e) {
+      console.error(e);
+      toast.error("Couldn't delete this chat.");
+    }
+  };
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -257,17 +279,29 @@ const Chat: React.FC = () => {
               History
             </p>
             {conversations.map((c) => (
-              <button
+              <div
                 key={c.id}
-                onClick={() => selectChat(c)}
-                className={`mb-1 w-full truncate rounded-md px-2 py-2 text-left text-sm transition ${
-                  c.id === activeId
-                    ? "bg-gray-200 font-medium"
-                    : "hover:bg-gray-100"
+                className={`group mb-1 flex items-center gap-1 rounded-md pr-1 transition ${
+                  c.id === activeId ? "bg-gray-200" : "hover:bg-gray-100"
                 }`}
               >
-                {c.title}
-              </button>
+                <button
+                  onClick={() => selectChat(c)}
+                  className={`min-w-0 flex-1 truncate px-2 py-2 text-left text-sm ${
+                    c.id === activeId ? "font-medium" : ""
+                  }`}
+                >
+                  {c.title}
+                </button>
+                <button
+                  aria-label="Delete chat"
+                  title="Delete chat"
+                  onClick={() => removeChat(c)}
+                  className="shrink-0 rounded p-1 text-gray-400 opacity-0 transition hover:bg-gray-300 hover:text-red-600 focus:opacity-100 group-hover:opacity-100"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             ))}
           </div>
           <div className="border-t border-gray-200 p-3">
