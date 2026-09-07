@@ -182,6 +182,8 @@ const Chat: React.FC = () => {
           model: settings.chat_model,
           webSearch: settings.web_search,
           fileSearch: settings.file_search,
+          systemPrompt: settings.system_prompt,
+          userPromptAddition: settings.user_prompt_addition,
         }),
       });
       if (!res.ok) throw new Error(`chat failed: ${res.status}`);

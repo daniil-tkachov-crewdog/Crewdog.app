@@ -42,7 +42,8 @@ app.get("/api/models", async (_req, res) => {
 // POST /api/chat  { messages: [{role, content}], model?, webSearch? }
 app.post("/api/chat", async (req, res) => {
   try {
-    const { messages, model, webSearch, fileSearch } = req.body ?? {};
+    const { messages, model, webSearch, fileSearch, systemPrompt: sysOverride, userPromptAddition } =
+      req.body ?? {};
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: "messages[] is required" });
     }
@@ -51,13 +52,30 @@ app.post("/api/chat", async (req, res) => {
     if (webSearch) tools.push({ type: "web_search" });
     if (fileSearch) tools.push({ type: "file_search" });
 
+    const instructions =
+      (typeof sysOverride === "string" && sysOverride.trim()) ||
+      systemPrompt() ||
+      undefined;
+    const addition = typeof userPromptAddition === "string" ? userPromptAddition.trim() : "";
+
+    const input = messages.map((m) => ({
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: String(m.content ?? ""),
+    }));
+    // Attach the hidden instruction to the latest user message (invisible to the user).
+    if (addition) {
+      for (let i = input.length - 1; i >= 0; i--) {
+        if (input[i].role === "user") {
+          input[i] = { ...input[i], content: `${input[i].content}\n\n${addition}` };
+          break;
+        }
+      }
+    }
+
     const response = await openai.responses.create({
       model: model || DEFAULT_MODEL,
-      instructions: systemPrompt() || undefined,
-      input: messages.map((m) => ({
-        role: m.role === "assistant" ? "assistant" : "user",
-        content: String(m.content ?? ""),
-      })),
+      instructions,
+      input,
       tools: tools.length ? tools : undefined,
     });
 
