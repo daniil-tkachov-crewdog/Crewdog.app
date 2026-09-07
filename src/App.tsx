@@ -20,6 +20,8 @@ import Pricing from "./pages/Pricing";
 import NotFound from "./pages/NotFound";
 import { AuthProvider } from "./auth/AuthProvider";
 import { RequireAuth } from "./auth/RequireAuth";
+import { RequireAdmin } from "./auth/RequireAdmin";
+import Admin from "./pages/Admin";
 import Verify from "./pages/Verify";
 import ResetPassword from "./pages/ResetPassword";
 import ConsentBanner from "@/components/ConsentBanner";
@@ -58,6 +60,14 @@ const App = () => (
                   <RequireAuth>
                     <Account />
                   </RequireAuth>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <RequireAdmin>
+                    <Admin />
+                  </RequireAdmin>
                 }
               />
               <Route path="/pricing" element={<Pricing />} />
