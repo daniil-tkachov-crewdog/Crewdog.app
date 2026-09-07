@@ -27,7 +27,7 @@ function Wordmark({ dark = false }: { dark?: boolean }) {
 export default function Login() {
   const navigate = useNavigate();
   const [sp] = useSearchParams();
-  const from = sp.get("from") ?? "/run";
+  const from = sp.get("from") ?? "/chat";
 
   const { user, signInWithPassword, signUpWithPassword, signInWithGoogle } =
     useAuth();
@@ -41,7 +41,7 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (user) navigate("/run", { replace: true });
+    if (user) navigate("/chat", { replace: true });
   }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
