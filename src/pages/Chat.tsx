@@ -1,8 +1,15 @@
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  listChats,
+  listMessages,
+  createChat,
+  addMessage,
+} from "@/services/chat";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -22,9 +29,11 @@ type Message = {
 };
 
 type Conversation = {
-  id: string;
+  id: string; // local id; equals dbId once persisted
+  dbId?: string; // set once the conversation exists in the DB
   title: string;
   messages: Message[];
+  loaded: boolean; // whether messages have been fetched from the DB
 };
 
 const uid = () => Math.random().toString(36).slice(2);
@@ -40,6 +49,7 @@ const newConversation = (): Conversation => ({
   id: uid(),
   title: "New chat",
   messages: [],
+  loaded: true, // a brand-new local chat has nothing to fetch
 });
 
 const Chat: React.FC = () => {
@@ -59,6 +69,12 @@ const Chat: React.FC = () => {
   const [input, setInput] = React.useState("");
   const [thinking, setThinking] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  // Maps a conversation's local id -> its DB id. A ref so async callbacks
+  // (e.g. the delayed assistant reply) always read the latest value.
+  const dbIds = React.useRef<Record<string, string>>({});
+  // In-flight createChat promises, keyed by local id, so the user message and
+  // the delayed assistant reply share one insert instead of racing to create two.
+  const creating = React.useRef<Record<string, Promise<string>>>({});
 
   const active =
     conversations.find((c) => c.id === activeId) ?? conversations[0];
@@ -70,10 +86,71 @@ const Chat: React.FC = () => {
     });
   }, [active.messages, thinking]);
 
-  const updateActive = (updater: (c: Conversation) => Conversation) => {
+  const updateConversation = (
+    id: string,
+    updater: (c: Conversation) => Conversation
+  ) => {
     setConversations((prev) =>
-      prev.map((c) => (c.id === activeId ? updater(c) : c))
+      prev.map((c) => (c.id === id ? updater(c) : c))
     );
+  };
+
+  // Load the user's saved conversations on login. Logged-out users stay local-only.
+  React.useEffect(() => {
+    dbIds.current = {};
+    if (!isAuthed) {
+      const fresh = newConversation();
+      setConversations([fresh]);
+      setActiveId(fresh.id);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await listChats();
+        if (cancelled) return;
+        const loaded: Conversation[] = rows.map((r) => ({
+          id: r.id,
+          dbId: r.id,
+          title: r.title,
+          messages: [],
+          loaded: false,
+        }));
+        rows.forEach((r) => (dbIds.current[r.id] = r.id));
+        // Start on a fresh empty chat, with saved history below it in the sidebar.
+        const fresh = newConversation();
+        setConversations([fresh, ...loaded]);
+        setActiveId(fresh.id);
+      } catch (e) {
+        console.error(e);
+        toast.error("Couldn't load your chat history.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthed, user?.id]);
+
+  // Fetch messages the first time a saved conversation is opened.
+  const selectChat = async (conv: Conversation) => {
+    setActiveId(conv.id);
+    if (conv.loaded || !conv.dbId) return;
+    try {
+      const rows = await listMessages(conv.dbId);
+      updateConversation(conv.id, (c) => ({
+        ...c,
+        loaded: true,
+        messages: rows.map((m) => ({
+          id: m.id,
+          role: m.role === "assistant" ? "assistant" : "user",
+          content: m.content,
+        })),
+      }));
+    } catch (e) {
+      console.error(e);
+      toast.error("Couldn't load this conversation.");
+    }
   };
 
   const send = () => {
@@ -81,21 +158,71 @@ const Chat: React.FC = () => {
     if (!text || thinking) return;
     setInput("");
 
+    const convId = activeId;
+    const isFirst = active.messages.length === 0;
     const userMsg: Message = { id: uid(), role: "user", content: text };
-    updateActive((c) => ({
+    updateConversation(convId, (c) => ({
       ...c,
-      title: c.messages.length === 0 ? text.slice(0, 40) : c.title,
+      title: isFirst ? text.slice(0, 40) : c.title,
       messages: [...c.messages, userMsg],
     }));
+
+    // Persist the user's message (creating the conversation on first message).
+    if (isAuthed && user) {
+      void persistUserMessage(convId, text, isFirst);
+    }
 
     setThinking(true);
     window.setTimeout(() => {
       const reply =
         DEMO_REPLIES[Math.floor(Math.random() * DEMO_REPLIES.length)];
       const botMsg: Message = { id: uid(), role: "assistant", content: reply };
-      updateActive((c) => ({ ...c, messages: [...c.messages, botMsg] }));
+      updateConversation(convId, (c) => ({
+        ...c,
+        messages: [...c.messages, botMsg],
+      }));
       setThinking(false);
+      if (isAuthed && user) void persistAssistantMessage(convId, reply);
     }, 700);
+  };
+
+  // Resolves the conversation's DB id, creating the row once if needed.
+  const ensureChat = (convId: string, title: string): Promise<string> => {
+    const existing = dbIds.current[convId];
+    if (existing) return Promise.resolve(existing);
+    if (!creating.current[convId]) {
+      creating.current[convId] = createChat(user!.id, title).then((row) => {
+        dbIds.current[convId] = row.id;
+        updateConversation(convId, (c) => ({ ...c, dbId: row.id }));
+        return row.id;
+      });
+    }
+    return creating.current[convId];
+  };
+
+  const persistUserMessage = async (
+    convId: string,
+    text: string,
+    isFirst: boolean
+  ) => {
+    if (!user) return;
+    try {
+      const dbId = await ensureChat(convId, isFirst ? text.slice(0, 40) : "New chat");
+      await addMessage(user.id, dbId, "user", text);
+    } catch (e) {
+      console.error(e);
+      toast.error("Couldn't save your message.");
+    }
+  };
+
+  const persistAssistantMessage = async (convId: string, text: string) => {
+    if (!user) return;
+    try {
+      const dbId = await ensureChat(convId, "New chat");
+      await addMessage(user.id, dbId, "assistant", text);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const startNewChat = () => {
@@ -132,7 +259,7 @@ const Chat: React.FC = () => {
             {conversations.map((c) => (
               <button
                 key={c.id}
-                onClick={() => setActiveId(c.id)}
+                onClick={() => selectChat(c)}
                 className={`mb-1 w-full truncate rounded-md px-2 py-2 text-left text-sm transition ${
                   c.id === activeId
                     ? "bg-gray-200 font-medium"
