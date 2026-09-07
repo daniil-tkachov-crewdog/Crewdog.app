@@ -3,6 +3,15 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+} from "@/components/ui/dropdown-menu";
 import logo from "@/assets/CrewDog-App-Logo.png";
 
 type Message = {
@@ -128,12 +137,39 @@ const Chat: React.FC = () => {
             ))}
           </div>
           <div className="border-t border-gray-200 p-3">
-            <Link
-              to="/account"
-              className="block rounded-md px-2 py-2 text-sm hover:bg-gray-100"
-            >
-              {user?.email ?? "Profile"}
-            </Link>
+            <DropdownMenu>
+              <DropdownMenuTrigger className="w-full truncate rounded-md px-2 py-2 text-left text-sm hover:bg-gray-100 focus:outline-none">
+                {user?.email ?? "Profile"}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" side="top" className="w-56">
+                <DropdownMenuItem asChild>
+                  <Link to="/pricing">Your Plan</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/account">Account</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/settings">Settings</Link>
+                </DropdownMenuItem>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>Help</DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    <DropdownMenuItem asChild>
+                      <Link to="/faq">FAQ</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/support">Support</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/privacy">Privacy Policy</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/terms">Terms of Use</Link>
+                    </DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </aside>
       )}

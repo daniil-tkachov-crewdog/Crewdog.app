@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import ScrollToTop from "./components/ScrollToTop";
 import Chat from "./pages/Chat";
+import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import Account from "./pages/Account";
@@ -46,6 +47,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Navigate to="/chat" replace />} />
               <Route path="/chat" element={<Chat />} />
+              <Route path="/settings" element={<Settings />} />
               <Route path="/login" element={<Login />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
