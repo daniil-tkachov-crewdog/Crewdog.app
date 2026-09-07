@@ -24,13 +24,32 @@ function systemPrompt() {
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
+// GET /api/models — list all available models from OpenAI (kept fresh automatically).
+app.get("/api/models", async (_req, res) => {
+  try {
+    const list = await openai.models.list();
+    const ids = (list?.data ?? [])
+      .map((m) => m.id)
+      .filter((id) => /^(gpt|o\d|chatgpt)/i.test(id))
+      .sort();
+    res.json({ models: ids });
+  } catch (err) {
+    console.error("[/api/models]", err?.message || err);
+    res.status(500).json({ error: "Could not load models" });
+  }
+});
+
 // POST /api/chat  { messages: [{role, content}], model?, webSearch? }
 app.post("/api/chat", async (req, res) => {
   try {
-    const { messages, model, webSearch } = req.body ?? {};
+    const { messages, model, webSearch, fileSearch } = req.body ?? {};
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: "messages[] is required" });
     }
+
+    const tools = [];
+    if (webSearch) tools.push({ type: "web_search" });
+    if (fileSearch) tools.push({ type: "file_search" });
 
     const response = await openai.responses.create({
       model: model || DEFAULT_MODEL,
@@ -39,10 +58,19 @@ app.post("/api/chat", async (req, res) => {
         role: m.role === "assistant" ? "assistant" : "user",
         content: String(m.content ?? ""),
       })),
-      tools: webSearch ? [{ type: "web_search" }] : undefined,
+      tools: tools.length ? tools : undefined,
     });
 
-    res.json({ reply: response.output_text ?? "", model: model || DEFAULT_MODEL });
+    const u = response.usage ?? {};
+    res.json({
+      reply: response.output_text ?? "",
+      model: model || DEFAULT_MODEL,
+      usage: {
+        input_tokens: u.input_tokens ?? 0,
+        output_tokens: u.output_tokens ?? 0,
+        total_tokens: u.total_tokens ?? 0,
+      },
+    });
   } catch (err) {
     console.error("[/api/chat]", err?.message || err);
     res.status(500).json({ error: "Chat request failed" });

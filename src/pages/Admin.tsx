@@ -1,5 +1,6 @@
 import { useState } from "react";
 import UsersTab from "./admin/UsersTab";
+import ApiTab from "./admin/ApiTab";
 
 const TABS = ["Users", "API", "Prompts", "Settings"] as const;
 type Tab = (typeof TABS)[number];
@@ -35,7 +36,8 @@ const Admin = () => {
 
       <main className="p-6">
         {active === "Users" && <UsersTab />}
-        {/* API, Prompts, Settings intentionally empty for now */}
+        {active === "API" && <ApiTab />}
+        {/* Prompts, Settings intentionally empty for now */}
       </main>
     </div>
   );

@@ -12,6 +12,7 @@ import {
   addMessage,
   deleteChat,
 } from "@/services/chat";
+import { getSettings, logTokenUsage } from "@/services/settings";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -172,14 +173,23 @@ const Chat: React.FC = () => {
 
     setThinking(true);
     try {
+      const settings = await getSettings();
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: outgoing }),
+        body: JSON.stringify({
+          messages: outgoing,
+          model: settings.chat_model,
+          webSearch: settings.web_search,
+          fileSearch: settings.file_search,
+        }),
       });
       if (!res.ok) throw new Error(`chat failed: ${res.status}`);
       const data = await res.json();
       const reply = String(data?.reply ?? "").trim() || "(no response)";
+      if (isAuthed && user && data?.usage) {
+        void logTokenUsage(user.id, data?.model ?? settings.chat_model, data.usage);
+      }
       const botMsg: Message = { id: uid(), role: "assistant", content: reply };
       updateConversation(convId, (c) => ({
         ...c,
