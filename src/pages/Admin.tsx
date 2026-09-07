@@ -1,4 +1,5 @@
 import { useState } from "react";
+import UsersTab from "./admin/UsersTab";
 
 const TABS = ["Users", "API", "Prompts", "Settings"] as const;
 type Tab = (typeof TABS)[number];
@@ -33,7 +34,8 @@ const Admin = () => {
       </nav>
 
       <main className="p-6">
-        {/* Placeholder content — tabs intentionally empty for now */}
+        {active === "Users" && <UsersTab />}
+        {/* API, Prompts, Settings intentionally empty for now */}
       </main>
     </div>
   );
