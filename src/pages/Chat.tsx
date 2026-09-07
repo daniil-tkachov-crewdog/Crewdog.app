@@ -40,13 +40,6 @@ type Conversation = {
 
 const uid = () => Math.random().toString(36).slice(2);
 
-// Demo-only canned responses. Real backend (ChatGPT API) comes later.
-const DEMO_REPLIES = [
-  "This is a demo response. Once the backend is wired up, I'll answer using the ChatGPT API.",
-  "Good question — for now I'm running in demo mode, so my replies are placeholders.",
-  "Got it. In the full version this is where Crewdog's assistant would help you out.",
-];
-
 const newConversation = (): Conversation => ({
   id: uid(),
   title: "New chat",
@@ -155,7 +148,7 @@ const Chat: React.FC = () => {
     }
   };
 
-  const send = () => {
+  const send = async () => {
     const text = input.trim();
     if (!text || thinking) return;
     setInput("");
@@ -163,29 +156,42 @@ const Chat: React.FC = () => {
     const convId = activeId;
     const isFirst = active.messages.length === 0;
     const userMsg: Message = { id: uid(), role: "user", content: text };
+    // Full turn history to send to the model (prior messages + this one).
+    const outgoing = [...active.messages, userMsg].map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+
     updateConversation(convId, (c) => ({
       ...c,
       title: isFirst ? text.slice(0, 40) : c.title,
       messages: [...c.messages, userMsg],
     }));
 
-    // Persist the user's message (creating the conversation on first message).
-    if (isAuthed && user) {
-      void persistUserMessage(convId, text, isFirst);
-    }
+    if (isAuthed && user) void persistUserMessage(convId, text, isFirst);
 
     setThinking(true);
-    window.setTimeout(() => {
-      const reply =
-        DEMO_REPLIES[Math.floor(Math.random() * DEMO_REPLIES.length)];
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: outgoing }),
+      });
+      if (!res.ok) throw new Error(`chat failed: ${res.status}`);
+      const data = await res.json();
+      const reply = String(data?.reply ?? "").trim() || "(no response)";
       const botMsg: Message = { id: uid(), role: "assistant", content: reply };
       updateConversation(convId, (c) => ({
         ...c,
         messages: [...c.messages, botMsg],
       }));
-      setThinking(false);
       if (isAuthed && user) void persistAssistantMessage(convId, reply);
-    }, 700);
+    } catch (e) {
+      console.error(e);
+      toast.error("Couldn't reach the assistant. Try again.");
+    } finally {
+      setThinking(false);
+    }
   };
 
   // Resolves the conversation's DB id, creating the row once if needed.
@@ -432,7 +438,7 @@ const Chat: React.FC = () => {
             </Button>
           </div>
           <p className="mx-auto mt-2 max-w-2xl text-center text-xs text-gray-400">
-            Demo mode — responses are placeholders.
+            Crewdog can make mistakes. Check important info.
           </p>
         </div>
       </main>

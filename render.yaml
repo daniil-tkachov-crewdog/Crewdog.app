@@ -1,15 +1,25 @@
-services: []
-
-staticSites:
-  - name: crewdog-frontend
+services:
+  - type: web
+    name: crewdog-app
+    runtime: node
+    plan: starter
     buildCommand: npm ci && npm run build
-    publishPath: dist
+    startCommand: npm start
     envVars:
+      - key: OPENAI_API_KEY
+        sync: false
       - key: VITE_SITE_URL
         value: https://www.crewdog.app
       - key: VITE_API_BASE
         value: https://gatecrasher-public.onrender.com/api
-    routes:
-      - type: rewrite
-        source: "/*"
-        destination: "/index.html"
+      # Set these (secrets) in the Render dashboard for this service.
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+      - key: VITE_STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: VITE_GTM_ID
+        sync: false
+      - key: VITE_N8N_GATECRASHER_URL
+        sync: false
