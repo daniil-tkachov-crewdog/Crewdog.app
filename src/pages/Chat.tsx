@@ -3,7 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
+import { Copy, Check } from "lucide-react";
 import { Wordmark, ThemeToggle } from "@/components/layout/chrome";
+import { renderRichText } from "@/components/chat/richtext";
 import {
   listChats,
   listMessages,
@@ -45,6 +47,85 @@ const newConversation = (): Conversation => ({
   messages: [],
   loaded: true, // a brand-new local chat has nothing to fetch
 });
+
+// Playful, on-brand loading lines shown while Crewdog fetches a reply.
+const THINKING_PHRASES = [
+  "Sniffing out the answer…",
+  "On the scent…",
+  "Fetching…",
+  "Digging up the details…",
+  "Following the trail…",
+  "Chasing down the lead…",
+  "Rounding up results…",
+  "Nose to the ground…",
+  "Good boy is thinking…",
+  "Almost got it…",
+];
+
+const ThinkingIndicator: React.FC = () => {
+  const [i, setI] = React.useState(
+    () => Math.floor(Math.random() * THINKING_PHRASES.length)
+  );
+  React.useEffect(() => {
+    const id = setInterval(
+      () => setI((v) => (v + 1) % THINKING_PHRASES.length),
+      2200
+    );
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div className="chat-rise-in flex items-center gap-3">
+      <div className="flex items-center gap-[5px]">
+        {[0, 0.18, 0.36].map((d) => (
+          <span
+            key={d}
+            className="chat-dot h-[7px] w-[7px] rounded-full bg-[#B6B3AA] dark:bg-[#6C6963]"
+            style={{ animationDelay: `${d}s` }}
+          />
+        ))}
+      </div>
+      <span
+        key={i}
+        className="chat-phrase text-[14px] text-[#6E6B64] dark:text-[#96938C]"
+      >
+        {THINKING_PHRASES[i]}
+      </span>
+    </div>
+  );
+};
+
+const CopyButton: React.FC<{ text: string; align: "start" | "end" }> = ({
+  text,
+  align,
+}) => {
+  const [copied, setCopied] = React.useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("Couldn't copy the message.");
+    }
+  };
+  return (
+    <div className={`flex ${align === "end" ? "justify-end" : "justify-start"}`}>
+      <button
+        onClick={copy}
+        aria-label="Copy message"
+        title="Copy message"
+        className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[12px] text-[#6E6B64] opacity-0 transition hover:text-[#1A1917] focus:opacity-100 group-hover:opacity-100 dark:text-[#96938C] dark:hover:text-[#ECEBE8]"
+      >
+        {copied ? (
+          <Check className="h-[13px] w-[13px]" />
+        ) : (
+          <Copy className="h-[13px] w-[13px]" />
+        )}
+        {copied ? "Copied" : "Copy"}
+      </button>
+    </div>
+  );
+};
 
 const Chat: React.FC = () => {
   const { user, signOut } = useAuth();
@@ -446,33 +527,31 @@ const Chat: React.FC = () => {
                 {active.messages.map((m, i) => (
                   <div
                     key={m.id}
-                    className={`chat-rise-in flex ${
-                      m.role === "user" ? "justify-end" : "justify-start"
-                    }`}
+                    className="chat-rise-in group flex flex-col gap-1"
                     style={{ animationDelay: `${Math.min(i * 80, 400)}ms` }}
                   >
-                    {m.role === "user" ? (
-                      <div className="max-w-[76%] whitespace-pre-wrap rounded-[18px] bg-[#F1F0EC] px-[18px] py-[13px] text-[15px] leading-[1.6] text-[#1A1917] dark:bg-[#26252B] dark:text-[#F3F2EF]">
-                        {m.content}
-                      </div>
-                    ) : (
-                      <div className="w-full whitespace-pre-wrap text-[16px] leading-[1.75] text-[#25231F] [text-wrap:pretty] dark:text-[#DEDCD7]">
-                        {m.content}
-                      </div>
-                    )}
+                    <div
+                      className={`flex ${
+                        m.role === "user" ? "justify-end" : "justify-start"
+                      }`}
+                    >
+                      {m.role === "user" ? (
+                        <div className="max-w-[76%] whitespace-pre-wrap rounded-[18px] bg-[#F1F0EC] px-[18px] py-[13px] text-[15px] leading-[1.6] text-[#1A1917] dark:bg-[#26252B] dark:text-[#F3F2EF]">
+                          {renderRichText(m.content)}
+                        </div>
+                      ) : (
+                        <div className="w-full whitespace-pre-wrap text-[16px] leading-[1.75] text-[#25231F] [text-wrap:pretty] dark:text-[#DEDCD7]">
+                          {renderRichText(m.content)}
+                        </div>
+                      )}
+                    </div>
+                    <CopyButton
+                      text={m.content}
+                      align={m.role === "user" ? "end" : "start"}
+                    />
                   </div>
                 ))}
-                {thinking && (
-                  <div className="chat-rise-in flex items-center gap-[5px]">
-                    {[0, 0.18, 0.36].map((d) => (
-                      <span
-                        key={d}
-                        className="chat-dot h-[7px] w-[7px] rounded-full bg-[#B6B3AA] dark:bg-[#6C6963]"
-                        style={{ animationDelay: `${d}s` }}
-                      />
-                    ))}
-                  </div>
-                )}
+                {thinking && <ThinkingIndicator />}
               </div>
             )}
           </div>

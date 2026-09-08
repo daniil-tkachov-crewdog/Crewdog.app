@@ -147,8 +147,15 @@ All colors MUST be HSL.
     0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
     40% { opacity: 1; transform: translateY(-3px); }
   }
+  .chat-phrase {
+    animation: chat-fade 0.4s ease both;
+  }
+  @keyframes chat-fade {
+    0% { opacity: 0; transform: translateY(3px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
   @media (prefers-reduced-motion: reduce) {
-    .chat-rise-in, .chat-dot { animation: none; }
+    .chat-rise-in, .chat-dot, .chat-phrase { animation: none; }
   }
 
   /* Radar run-page scanline (loading state) */
