@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Topbar } from "@/components/layout/Topbar";
-import { Footer } from "@/components/layout/Footer";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
+import { Wordmark, ThemeToggle } from "@/components/layout/chrome";
+import {
+  CARD,
+  BTN_ACCENT,
+  BTN_GHOST,
+  SECTION_LABEL,
+  SECONDARY,
+  MUTED,
+} from "@/components/account/ui";
 import { motion } from "framer-motion";
 import { gaEvent } from "@/analytics/gtm";
 import { useAuth } from "@/auth/AuthProvider";
@@ -141,69 +149,67 @@ export default function Pricing() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F4F2EE] text-[#0B0B0F] font-['Space_Grotesk',system-ui,sans-serif]">
-      <Topbar />
-
-      {/* ── Hero ── */}
-      <header className="relative overflow-hidden bg-[#0B0B0F] text-white">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-40 -top-20 h-[520px] w-[520px] rounded-full border border-[#FF5A1F]/20 max-[720px]:right-[-220px] max-[720px]:opacity-50"
-        >
-          <div className="absolute inset-20 rounded-full border border-[#FF5A1F]/[0.14]" />
-          <div className="absolute inset-[170px] rounded-full border border-[#FF5A1F]/10" />
-        </div>
-
-        <div className="mx-auto w-full max-w-[1040px] px-6 py-[72px] pb-20">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
+    <div className="flex min-h-screen flex-col bg-white font-grotesk text-[#1A1917] dark:bg-[#17161A] dark:text-[#ECEBE8]">
+      <header className="flex h-14 shrink-0 items-center justify-between px-6">
+        <Link to="/chat">
+          <Wordmark />
+        </Link>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-[6px] text-[13px] text-[#6E6B64] transition-colors hover:text-[#1A1917] dark:text-[#96938C] dark:hover:text-[#ECEBE8]"
           >
-            <span className="mb-7 block font-['IBM_Plex_Mono',monospace] text-[13px] uppercase tracking-[0.22em] text-[#FF5A1F]">
-              Pricing · No setup fees · Cancel anytime
-            </span>
-            <h1 className="max-w-[18ch] text-[clamp(38px,7vw,68px)] font-bold leading-[1.0] tracking-[-0.03em]">
-              Choose the plan that matches your{" "}
-              <em className="not-italic text-[#FF5A1F]">search volume.</em>
+            <ArrowLeft className="h-[15px] w-[15px]" />
+            Back
+          </button>
+          <ThemeToggle />
+        </div>
+      </header>
+
+      <main className="flex-1 pb-16 pt-6">
+        <div className="mx-auto w-full max-w-[1040px] px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="mb-10 text-center"
+          >
+            <span className={SECTION_LABEL}>Pricing · Cancel anytime</span>
+            <h1 className="mx-auto mt-3 max-w-[20ch] text-[clamp(32px,5vw,44px)] font-semibold leading-[1.05] tracking-[-0.03em]">
+              Simple pricing that scales with you
             </h1>
 
             {/* Current plan info (logged-in) */}
             {user && summary && (
-              <div className="mt-9 inline-flex flex-wrap items-center gap-x-6 gap-y-2 rounded-md border border-[#FF5A1F]/30 bg-white/[0.04] px-5 py-4">
-                <span className="font-['IBM_Plex_Mono',monospace] text-[11px] uppercase tracking-[0.16em] text-[#6F6C78]">
+              <div className={`mx-auto mt-6 inline-flex flex-wrap items-center justify-center gap-x-5 gap-y-2 px-5 py-3 ${CARD}`}>
+                <span className={`text-[11px] uppercase tracking-[0.06em] ${MUTED}`}>
                   Your plan
                 </span>
                 <span className="flex items-center gap-2">
-                  <span className="text-[18px] font-semibold text-[#FF5A1F]">
+                  <span className="text-[16px] font-semibold text-[#E0480F] dark:text-[#FF5A1F]">
                     {summary.planLabel || (summary.pro ? "Pro" : "Free")}
                   </span>
                   {(summary.pro || summary.unlimited) && (
-                    <span className="font-['IBM_Plex_Mono',monospace] text-[11px] uppercase tracking-[0.06em] text-[#FF5A1F]">
+                    <span className="text-[11px] uppercase tracking-[0.04em] text-[#E0480F] dark:text-[#FF5A1F]">
                       ✓ Active
                     </span>
                   )}
                 </span>
                 {!summary.unlimited && summary.remaining !== null && (
-                  <span className="font-['IBM_Plex_Mono',monospace] text-[12px] tracking-[0.04em] text-[#C9C6CF]">
+                  <span className={`text-[12px] ${SECONDARY}`}>
                     {summary.remaining} searches left
                     {summary.cap ? ` of ${summary.cap}` : ""}
                   </span>
                 )}
                 {summary.unlimited && (
-                  <span className="font-['IBM_Plex_Mono',monospace] text-[12px] tracking-[0.04em] text-[#C9C6CF]">
+                  <span className={`text-[12px] ${SECONDARY}`}>
                     ∞ Unlimited searches
                   </span>
                 )}
               </div>
             )}
           </motion.div>
-        </div>
-      </header>
 
-      {/* ── Plans ── */}
-      <main className="flex-1 py-16">
-        <div className="mx-auto w-full max-w-[1100px] px-6">
           <div className="mx-auto grid max-w-[720px] grid-cols-1 items-stretch gap-5 sm:grid-cols-2">
             {plans.map((plan, i) => {
               const price = plan.monthlyPrice;
@@ -218,19 +224,22 @@ export default function Pricing() {
                   viewport={{ once: true, amount: 0.2 }}
                   transition={{ delay: i * 0.06, duration: 0.4 }}
                   className={
-                    "relative flex h-full flex-col rounded-md border bg-white p-6 " +
-                    (popular ? "border-[#FF5A1F] ring-1 ring-[#FF5A1F]" : "border-[#E4E1D9]")
+                    "relative flex h-full flex-col p-6 " +
+                    CARD +
+                    (popular
+                      ? " border-[#E0480F] ring-1 ring-[#E0480F] dark:border-[#FF5A1F] dark:ring-[#FF5A1F]"
+                      : "")
                   }
                 >
                   {popular && (
-                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-[2px] bg-[#FF5A1F] px-3 py-1 font-['IBM_Plex_Mono',monospace] text-[10px] font-bold uppercase tracking-[0.06em] text-[#0B0B0F]">
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[#E0480F] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.04em] text-white dark:bg-[#FF5A1F] dark:text-[#0B0B0F]">
                       Most popular
                     </span>
                   )}
 
                   {/* Highlight */}
                   {plan.highlight && (
-                    <span className="font-['IBM_Plex_Mono',monospace] text-[11px] uppercase tracking-[0.1em] text-[#6F6C78]">
+                    <span className={`text-[11px] uppercase tracking-[0.06em] ${MUTED}`}>
                       {plan.highlight}
                     </span>
                   )}
@@ -242,24 +251,22 @@ export default function Pricing() {
 
                   {/* Price */}
                   <div className="mt-3 flex items-baseline gap-1">
-                    <span className="font-['IBM_Plex_Mono',monospace] text-[34px] font-bold tracking-[-0.02em] text-[#0B0B0F]">
+                    <span className="text-[34px] font-bold tracking-[-0.02em] text-[#1A1917] dark:text-[#ECEBE8]">
                       {price}
                     </span>
-                    <span className="font-['IBM_Plex_Mono',monospace] text-[12px] text-[#6F6C78]">
-                      /{plan.period}
-                    </span>
+                    <span className={`text-[12px] ${MUTED}`}>/{plan.period}</span>
                   </div>
 
-                  <div className="my-5 h-px w-full bg-[#E4E1D9]" />
+                  <div className="my-5 h-px w-full bg-[rgba(26,25,23,0.1)] dark:bg-[rgba(255,255,255,0.1)]" />
 
                   {/* Features */}
                   <ul className="mb-6 flex-1 space-y-2.5">
                     {plan.features.map((feature) => (
                       <li key={feature} className="flex gap-2.5">
-                        <span className="mt-[1px] flex-shrink-0 font-['IBM_Plex_Mono',monospace] text-[#FF5A1F]">
+                        <span className="mt-[1px] flex-shrink-0 text-[#E0480F] dark:text-[#FF5A1F]">
                           ›
                         </span>
-                        <span className="text-[13px] leading-snug text-[#55525E]">
+                        <span className={`text-[13px] leading-snug ${SECONDARY}`}>
                           {feature}
                         </span>
                       </li>
@@ -272,10 +279,9 @@ export default function Pricing() {
                       <button
                         onClick={() => handlePlanClick(plan.name, isPaid)}
                         className={
-                          "w-full rounded-[2px] px-4 py-[12px] text-[14px] font-semibold transition-transform hover:-translate-y-0.5 " +
-                          (summary.planLabel === plan.name
-                            ? "bg-[#FF5A1F] text-[#0B0B0F]"
-                            : "border border-[#E4E1D9] hover:border-[#FF5A1F]")
+                          summary.planLabel === plan.name
+                            ? `w-full ${BTN_ACCENT}`
+                            : `w-full ${BTN_GHOST}`
                         }
                       >
                         {summary.planLabel === plan.name
@@ -287,10 +293,8 @@ export default function Pricing() {
                         disabled={plan.disabled}
                         onClick={() => handlePlanClick(plan.name, isPaid)}
                         className={
-                          "w-full rounded-[2px] px-4 py-[12px] text-[14px] font-semibold transition-transform hover:-translate-y-0.5 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 " +
-                          (plan.name === "Free"
-                            ? "border border-[#E4E1D9] hover:border-[#FF5A1F]"
-                            : "bg-[#FF5A1F] text-[#0B0B0F]")
+                          "w-full " +
+                          (plan.name === "Free" ? BTN_GHOST : BTN_ACCENT)
                         }
                       >
                         {plan.cta}
@@ -303,8 +307,6 @@ export default function Pricing() {
           </div>
         </div>
       </main>
-
-      <Footer />
     </div>
   );
 }
