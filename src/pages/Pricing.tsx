@@ -34,32 +34,14 @@ const plans = [
     disabled: false,
   },
   {
-    name: "Bronze",
-    monthlyPrice: "£9.99",
-    annualPrice: "£99",
+    name: "Pro",
+    monthlyPrice: "£19.50",
+    annualPrice: "£234",
     period: "per month",
     description: "",
-    highlight: "Active job seekers",
+    highlight: "For serious hiring",
     features: [
-      "20 searches per month",
-      "Full company intelligence",
-      "Priority email support",
-      "Contact recommendations",
-      "Search history (1 year)",
-      "Export results",
-      "Advanced filters",
-    ],
-    cta: "Choose Platinum",
-  },
-  {
-    name: "Silver",
-    monthlyPrice: "£29.99",
-    annualPrice: "£299",
-    period: "per month",
-    description: "",
-    highlight: "Power users",
-    features: [
-      "60 searches per month",
+      "Unlimited searches",
       "Full company intelligence",
       "Priority email support",
       "Contact recommendations",
@@ -67,44 +49,8 @@ const plans = [
       "Export results (CSV & XLSX)",
       "Advanced & saved filters",
     ],
-    cta: "Choose Silver",
-  },
-  {
-    name: "Gold",
-    monthlyPrice: "£99",
-    annualPrice: "£990",
-    period: "per month",
-    description: "",
-    highlight: "Most popular",
-    features: [
-      "200 searches per month",
-      "Deep company & team insights",
-      "Priority email support",
-      "Contact recommendations",
-      "Search history (1 year)",
-      "Export results & bulk actions",
-      "Advanced filters & saved views",
-    ],
-    cta: "Choose Gold",
+    cta: "Choose Pro",
     popular: true,
-  },
-  {
-    name: "Business",
-    monthlyPrice: "£299",
-    annualPrice: "£2,990",
-    period: "per month",
-    description: "",
-    highlight: "Teams (5 seats)",
-    features: [
-      "1000 searches per month",
-      "Up to 5 seats included",
-      "Full company & hiring pipeline intelligence",
-      "Priority support & onboarding",
-      "Team-wide search history (1 year)",
-      "Exports, bulk actions & collaboration",
-      "Advanced filters, saved views & team sharing",
-    ],
-    cta: "Choose Bussiness",
   },
 ];
 
@@ -176,12 +122,11 @@ export default function Pricing() {
         gaEvent("checkout_start", payload);
       } catch {}
 
-      // Map plan names to plan codes
+      // Map plan names to plan codes. The single paid plan reuses the
+      // "platinum" checkout code, which the Stripe backend maps to the
+      // £19.50 price.
       const planCodeMap: Record<string, PlanCode> = {
-        Platinum: "platinum",
-        Silver: "silver",
-        Gold: "gold",
-        Business: "business",
+        Pro: "platinum",
       };
 
       const planCode = planCodeMap[planName];
@@ -259,7 +204,7 @@ export default function Pricing() {
       {/* ── Plans ── */}
       <main className="flex-1 py-16">
         <div className="mx-auto w-full max-w-[1100px] px-6">
-          <div className="grid grid-cols-1 items-stretch gap-5 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="mx-auto grid max-w-[720px] grid-cols-1 items-stretch gap-5 sm:grid-cols-2">
             {plans.map((plan, i) => {
               const price = plan.monthlyPrice;
               const isPaid = plan.name !== "Free";

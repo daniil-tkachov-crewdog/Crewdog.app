@@ -55,6 +55,10 @@ function inferPlanFromPrice(
   if (currency !== "gbp") return null;
 
   switch (amount) {
+    case 1950:
+      // Current single paid plan (£19.50 / month) — unlimited searches.
+      return { code: "pro", label: "Pro", cap: 100000 };
+    // Legacy plans kept so existing subscribers still show the right label.
     case 999:
       return { code: "platinum", label: "Platinum", cap: 20 };
     case 2999:
@@ -73,14 +77,18 @@ function inferPlanFromPrice(
 
 export function normalizeSummary(s?: RawSummary): NormalizedSummary {
   const isAdmin = s?.isAdmin === true;
-  const unlimited =
-    isAdmin || s?.unlimited === true || s?.creditsRemaining === null;
-
   const status = String(s?.status || "none").toLowerCase();
   const pro = ["active", "trialing", "past_due", "unpaid"].includes(status);
 
-  // NEW: infer plan from Stripe price (Platinum/Silver/Gold/Business/Retention)
+  // NEW: infer plan from Stripe price (Pro / legacy plans)
   const plan = inferPlanFromPrice(s);
+
+  // The single paid "Pro" plan (£19.50/mo) grants unlimited searches.
+  const unlimited =
+    isAdmin ||
+    s?.unlimited === true ||
+    s?.creditsRemaining === null ||
+    (pro && plan?.code === "pro");
   const planCap = plan?.cap;
 
   const capCandidates = [

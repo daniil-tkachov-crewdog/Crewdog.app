@@ -137,20 +137,17 @@ export default function SubscriptionCard({
   const plans: Array<{
     code: PlanCode;
     name: string;
-    searches: number;
+    searches: string;
     price: string;
     highlight?: boolean;
   }> = [
     {
       code: "platinum",
-      name: "Platinum",
-      searches: 20,
-      price: "£9.99 / month",
+      name: "Pro",
+      searches: "Unlimited",
+      price: "£19.50 / month",
       highlight: true,
     },
-    { code: "silver", name: "Silver", searches: 60, price: "£29.99 / month" },
-    { code: "gold", name: "Gold", searches: 200, price: "£99 / month" },
-    { code: "business", name: "Business", searches: 1000, price: "£299 / month" },
   ];
 
   return (
