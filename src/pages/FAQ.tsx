@@ -1,7 +1,15 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { Topbar } from "@/components/layout/Topbar";
-import { Footer } from "@/components/layout/Footer";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
+import { Wordmark, ThemeToggle } from "@/components/layout/chrome";
+import {
+  CARD,
+  PANEL,
+  BTN_ACCENT,
+  SECTION_LABEL,
+  SECONDARY,
+  MUTED,
+} from "@/components/account/ui";
 import { motion, AnimatePresence } from "framer-motion";
 
 const faqs = [
@@ -64,144 +72,144 @@ const faqs = [
 
 export default function FAQ() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F4F2EE] text-[#0B0B0F] font-['Space_Grotesk',system-ui,sans-serif]">
-      <Topbar />
-
-      {/* ── Hero ── */}
-      <header className="relative overflow-hidden bg-[#0B0B0F] text-white">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-40 -top-20 h-[520px] w-[520px] rounded-full border border-[#FF5A1F]/20 max-[720px]:right-[-220px] max-[720px]:opacity-50"
-        >
-          <div className="absolute inset-20 rounded-full border border-[#FF5A1F]/[0.14]" />
-          <div className="absolute inset-[170px] rounded-full border border-[#FF5A1F]/10" />
-        </div>
-
-        <div className="mx-auto w-full max-w-[1040px] px-6 py-[72px] pb-20">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
+    <div className="flex min-h-screen flex-col bg-white font-grotesk text-[#1A1917] dark:bg-[#17161A] dark:text-[#ECEBE8]">
+      <header className="flex h-14 shrink-0 items-center justify-between px-6">
+        <Link to="/chat">
+          <Wordmark />
+        </Link>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-[6px] text-[13px] text-[#6E6B64] transition-colors hover:text-[#1A1917] dark:text-[#96938C] dark:hover:text-[#ECEBE8]"
           >
-            <span className="mb-7 block font-['IBM_Plex_Mono',monospace] text-[13px] uppercase tracking-[0.22em] text-[#FF5A1F]">
-              Help centre · Radar
-            </span>
-            <h1 className="max-w-[14ch] text-[clamp(40px,8vw,76px)] font-bold leading-[0.98] tracking-[-0.03em]">
-              How can we <em className="not-italic text-[#FF5A1F]">help?</em>
+            <ArrowLeft className="h-[15px] w-[15px]" />
+            Back
+          </button>
+          <ThemeToggle />
+        </div>
+      </header>
+
+      <main className="flex-1 pb-16 pt-6">
+        <div className="mx-auto w-full max-w-[1040px] px-6">
+          {/* ── Heading ── */}
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+          >
+            <span className={SECTION_LABEL}>Help centre</span>
+            <h1 className="mt-3 text-[clamp(32px,5vw,44px)] font-semibold leading-[1.05] tracking-[-0.03em]">
+              How can we help?
             </h1>
-            <p className="mt-[26px] max-w-[54ch] text-[clamp(16px,2.2vw,19px)] leading-[1.6] text-[#C9C6CF]">
+            <p className={`mt-4 max-w-[54ch] text-[16px] leading-[1.6] ${SECONDARY}`}>
               Answers to the questions recruiters ask most — how Radar reads an
               advert, what's in each plan, and how your data is handled.
             </p>
           </motion.div>
-        </div>
-      </header>
 
-      {/* ── FAQ content ── */}
-      <main className="flex-1 py-16">
-        <div className="mx-auto grid w-full max-w-[1040px] grid-cols-1 gap-10 px-6 lg:grid-cols-12">
-          {/* Sidebar */}
-          <aside className="lg:col-span-4">
-            <div className="lg:sticky lg:top-24">
-              <div className="rounded-md border border-[#E4E1D9] bg-white p-6">
-                <span className="font-['IBM_Plex_Mono',monospace] text-[12px] uppercase tracking-[0.16em] text-[#FF5A1F]">
-                  // support
-                </span>
-                <h2 className="mt-3 text-[28px] tracking-[-0.02em]">FAQs</h2>
-                <p className="mt-3 text-[15px] leading-[1.6] text-[#55525E]">
-                  Have questions? Check the common ones here for a quick answer —
-                  or reach out and we'll help directly.
-                </p>
-                <Link
-                  to="/support"
-                  className="mt-5 inline-block rounded-[2px] bg-[#FF5A1F] px-[20px] py-[11px] text-[14px] font-semibold text-[#0B0B0F] transition-transform hover:-translate-y-0.5"
-                >
-                  Contact support →
-                </Link>
-              </div>
+          {/* ── FAQ content ── */}
+          <div className="mt-10 grid grid-cols-1 gap-10 lg:grid-cols-12">
+            {/* Sidebar */}
+            <aside className="lg:col-span-4">
+              <div className="lg:sticky lg:top-10">
+                <div className={`p-6 ${CARD}`}>
+                  <span className={SECTION_LABEL}>Support</span>
+                  <h2 className="mt-3 text-[24px] font-semibold tracking-[-0.02em]">
+                    FAQs
+                  </h2>
+                  <p className={`mt-3 text-[15px] leading-[1.6] ${SECONDARY}`}>
+                    Have questions? Check the common ones here for a quick answer
+                    — or reach out and we'll help directly.
+                  </p>
+                  <Link to="/support" className={`mt-5 inline-block ${BTN_ACCENT}`}>
+                    Contact support →
+                  </Link>
+                </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                {[
-                  { v: String(faqs.length), l: "Questions" },
-                  { v: "24/7", l: "Support" },
-                ].map((s) => (
-                  <div
-                    key={s.l}
-                    className="rounded-[4px] border border-[#E4E1D9] bg-white px-5 py-4 text-center"
-                  >
-                    <div className="font-['IBM_Plex_Mono',monospace] text-[22px] font-semibold text-[#0B0B0F]">
-                      {s.v}
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  {[
+                    { v: String(faqs.length), l: "Questions" },
+                    { v: "24/7", l: "Support" },
+                  ].map((s) => (
+                    <div key={s.l} className={`px-5 py-4 text-center ${PANEL}`}>
+                      <div className="text-[22px] font-semibold text-[#1A1917] dark:text-[#ECEBE8]">
+                        {s.v}
+                      </div>
+                      <div className={`mt-1 text-[11px] uppercase tracking-[0.06em] ${MUTED}`}>
+                        {s.l}
+                      </div>
                     </div>
-                    <div className="mt-1 font-['IBM_Plex_Mono',monospace] text-[11px] uppercase tracking-[0.08em] text-[#6F6C78]">
-                      {s.l}
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          </aside>
+            </aside>
 
-          {/* FAQ list */}
-          <div className="lg:col-span-8">
-            <div className="space-y-3">
-              {faqs.map((faq, index) => {
-                const open = expandedId === index;
-                return (
-                  <div
-                    key={index}
-                    className={
-                      "overflow-hidden rounded-md border bg-white transition-colors " +
-                      (open ? "border-[#FF5A1F]" : "border-[#E4E1D9]")
-                    }
-                  >
-                    <button
-                      onClick={() => setExpandedId(open ? null : index)}
-                      className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left"
-                      aria-expanded={open}
+            {/* FAQ list */}
+            <div className="lg:col-span-8">
+              <div className="space-y-3">
+                {faqs.map((faq, index) => {
+                  const open = expandedId === index;
+                  return (
+                    <div
+                      key={index}
+                      className={
+                        "overflow-hidden transition-colors " +
+                        CARD +
+                        (open
+                          ? " border-[#E0480F] dark:border-[#FF5A1F]"
+                          : "")
+                      }
                     >
-                      <span className="text-[17px] font-semibold tracking-[-0.01em]">
-                        {faq.question}
-                      </span>
-                      <motion.span
-                        animate={{ rotate: open ? 90 : 0 }}
-                        transition={{ type: "spring", stiffness: 200, damping: 15 }}
-                        className={
-                          "flex-shrink-0 font-['IBM_Plex_Mono',monospace] text-[20px] " +
-                          (open ? "text-[#FF5A1F]" : "text-[#6F6C78]")
-                        }
+                      <button
+                        onClick={() => setExpandedId(open ? null : index)}
+                        className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left"
+                        aria-expanded={open}
                       >
-                        ›
-                      </motion.span>
-                    </button>
-
-                    <AnimatePresence>
-                      {open && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: "auto", opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.3, ease: "easeInOut" }}
-                          className="overflow-hidden"
+                        <span className="text-[16px] font-semibold tracking-[-0.01em]">
+                          {faq.question}
+                        </span>
+                        <motion.span
+                          animate={{ rotate: open ? 90 : 0 }}
+                          transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                          className={
+                            "flex-shrink-0 text-[20px] " +
+                            (open
+                              ? "text-[#E0480F] dark:text-[#FF5A1F]"
+                              : "text-[#6E6B64] dark:text-[#96938C]")
+                          }
                         >
-                          <div className="border-t border-[#E4E1D9] px-6 pb-6 pt-4">
-                            <p className="text-[15px] leading-[1.6] text-[#55525E]">
-                              {faq.answer}
-                            </p>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                );
-              })}
+                          ›
+                        </motion.span>
+                      </button>
+
+                      <AnimatePresence>
+                        {open && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.3, ease: "easeInOut" }}
+                            className="overflow-hidden"
+                          >
+                            <div className="border-t border-[rgba(26,25,23,0.1)] px-6 pb-6 pt-4 dark:border-[rgba(255,255,255,0.1)]">
+                              <p className={`text-[15px] leading-[1.6] ${SECONDARY}`}>
+                                {faq.answer}
+                              </p>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
       </main>
-
-      <Footer />
     </div>
   );
 }
