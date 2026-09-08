@@ -1,6 +1,15 @@
 import { useState } from "react";
-import { Topbar } from "@/components/layout/Topbar";
-import { Footer } from "@/components/layout/Footer";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
+import { Wordmark, ThemeToggle } from "@/components/layout/chrome";
+import {
+  CARD,
+  INPUT,
+  BTN_ACCENT,
+  FIELD_LABEL,
+  SECTION_LABEL,
+  SECONDARY,
+} from "@/components/account/ui";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { sendSupportMessage } from "@/services/support";
@@ -28,12 +37,10 @@ const faqs = [
   },
 ];
 
-const MONO_LABEL =
-  "block font-['IBM_Plex_Mono',monospace] text-[12px] uppercase tracking-[0.08em] text-[#6F6C78] mb-[10px]";
-const INPUT =
-  "w-full font-['Space_Grotesk',sans-serif] text-[15px] text-[#0B0B0F] bg-[#F4F2EE] border border-[#E4E1D9] rounded-[3px] px-[14px] py-[12px] transition-colors focus:outline-none focus:border-[#FF5A1F] disabled:opacity-50";
+const MONO_LABEL = FIELD_LABEL;
 
 export default function Support() {
+  const navigate = useNavigate();
   // form state
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -88,65 +95,59 @@ export default function Support() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F4F2EE] text-[#0B0B0F] font-['Space_Grotesk',system-ui,sans-serif]">
-      <Topbar />
-
-      {/* ── Hero ── */}
-      <header className="relative overflow-hidden bg-[#0B0B0F] text-white">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-40 -top-20 h-[520px] w-[520px] rounded-full border border-[#FF5A1F]/20 max-[720px]:right-[-220px] max-[720px]:opacity-50"
-        >
-          <div className="absolute inset-20 rounded-full border border-[#FF5A1F]/[0.14]" />
-          <div className="absolute inset-[170px] rounded-full border border-[#FF5A1F]/10" />
-        </div>
-
-        <div className="mx-auto w-full max-w-[1040px] px-6 py-[72px] pb-20">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
+    <div className="flex min-h-screen flex-col bg-white font-grotesk text-[#1A1917] dark:bg-[#17161A] dark:text-[#ECEBE8]">
+      <header className="flex h-14 shrink-0 items-center justify-between px-6">
+        <Link to="/chat">
+          <Wordmark />
+        </Link>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-[6px] text-[13px] text-[#6E6B64] transition-colors hover:text-[#1A1917] dark:text-[#96938C] dark:hover:text-[#ECEBE8]"
           >
-            <span className="mb-7 block font-['IBM_Plex_Mono',monospace] text-[13px] uppercase tracking-[0.22em] text-[#FF5A1F]">
-              Support · Radar
-            </span>
-            <h1 className="max-w-[15ch] text-[clamp(40px,8vw,76px)] font-bold leading-[0.98] tracking-[-0.03em]">
-              We're here to <em className="not-italic text-[#FF5A1F]">help.</em>
-            </h1>
-            <p className="mt-[26px] max-w-[54ch] text-[clamp(16px,2.2vw,19px)] leading-[1.6] text-[#C9C6CF]">
-              Get in touch with our team. Most messages get a reply within 24
-              hours on business days.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-x-8 gap-y-3 font-['IBM_Plex_Mono',monospace] text-[12px] uppercase tracking-[0.08em] text-[#6F6C78]">
-              <span>‹24h response</span>
-              <span>100% secure</span>
-              <span>Fast support</span>
-            </div>
-          </motion.div>
+            <ArrowLeft className="h-[15px] w-[15px]" />
+            Back
+          </button>
+          <ThemeToggle />
         </div>
       </header>
 
       {/* ── Content ── */}
-      <main className="flex-1 py-16">
-        <div className="mx-auto grid w-full max-w-[1040px] grid-cols-1 gap-8 px-6 lg:grid-cols-2">
+      <main className="flex-1 pb-16 pt-6">
+        <div className="mx-auto w-full max-w-[1040px] px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="mb-10"
+          >
+            <span className={SECTION_LABEL}>Support</span>
+            <h1 className="mt-3 text-[clamp(32px,5vw,44px)] font-semibold leading-[1.05] tracking-[-0.03em]">
+              We're here to help
+            </h1>
+            <p className={`mt-4 max-w-[54ch] text-[16px] leading-[1.6] ${SECONDARY}`}>
+              Get in touch with our team. Most messages get a reply within 24
+              hours on business days.
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
           {/* Form */}
-          <div className="rounded-md border border-[#E4E1D9] bg-white p-7 sm:p-8">
-            <span className="font-['IBM_Plex_Mono',monospace] text-[12px] uppercase tracking-[0.16em] text-[#FF5A1F]">
-              // send a message
-            </span>
-            <h2 className="mt-2 text-[24px] tracking-[-0.02em]">Contact support</h2>
-            <p className="mt-2 text-[15px] leading-[1.6] text-[#55525E]">
+          <div className={`p-7 sm:p-8 ${CARD}`}>
+            <span className={SECTION_LABEL}>Send a message</span>
+            <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.02em]">Contact support</h2>
+            <p className={`mt-2 text-[15px] leading-[1.6] ${SECONDARY}`}>
               Fill out the form and we'll get back to you shortly.
             </p>
 
             {success && (
-              <div className="mt-6 rounded-[4px] border border-[#FF5A1F]/40 bg-[#FF5A1F]/[0.06] px-4 py-3 font-['IBM_Plex_Mono',monospace] text-[12px] tracking-[0.04em] text-[#FF5A1F]">
+              <div className="mt-6 rounded-[10px] border border-[#E0480F]/40 bg-[#E0480F]/[0.06] px-4 py-3 text-[13px] text-[#E0480F] dark:border-[#FF5A1F]/40 dark:bg-[#FF5A1F]/[0.08] dark:text-[#FF5A1F]">
                 ✓ Thanks for your message! We'll get back to you within 24 hours.
               </div>
             )}
 
             {error && (
-              <div className="mt-6 rounded-[4px] border border-red-300 bg-red-50 px-4 py-3 font-['IBM_Plex_Mono',monospace] text-[12px] text-red-600">
+              <div className="mt-6 rounded-[10px] border border-red-300 bg-red-50 px-4 py-3 text-[13px] text-red-600 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-400">
                 {error}
               </div>
             )}
@@ -231,7 +232,7 @@ export default function Support() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full rounded-[2px] bg-[#FF5A1F] px-[22px] py-[13px] font-['Space_Grotesk',sans-serif] text-[15px] font-semibold text-[#0B0B0F] transition-transform hover:-translate-y-0.5 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40"
+                className={`w-full py-[13px] text-[15px] ${BTN_ACCENT}`}
               >
                 {loading ? "Sending..." : "Send message"}
               </button>
@@ -240,20 +241,18 @@ export default function Support() {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            <div className="rounded-md border border-[#E4E1D9] bg-white p-6 sm:p-7">
-              <span className="font-['IBM_Plex_Mono',monospace] text-[12px] uppercase tracking-[0.16em] text-[#FF5A1F]">
-                // quick answers
-              </span>
-              <div className="mt-4 divide-y divide-[#E4E1D9]">
+            <div className={`p-6 sm:p-7 ${CARD}`}>
+              <span className={SECTION_LABEL}>Quick answers</span>
+              <div className="mt-4 divide-y divide-[rgba(26,25,23,0.1)] dark:divide-[rgba(255,255,255,0.1)]">
                 {faqs.map((faq, index) => (
                   <details key={index} className="group py-1">
                     <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-3 text-[15px] font-medium">
                       <span>{faq.question}</span>
-                      <span className="flex-shrink-0 font-['IBM_Plex_Mono',monospace] text-[#FF5A1F] transition-transform group-open:rotate-90">
+                      <span className="flex-shrink-0 text-[#E0480F] transition-transform group-open:rotate-90 dark:text-[#FF5A1F]">
                         ›
                       </span>
                     </summary>
-                    <p className="pb-3 text-[14px] leading-[1.6] text-[#55525E]">
+                    <p className={`pb-3 text-[14px] leading-[1.6] ${SECONDARY}`}>
                       {faq.answer}
                     </p>
                   </details>
@@ -262,20 +261,17 @@ export default function Support() {
             </div>
 
             {/* Response time */}
-            <div className="rounded-md border border-[#E4E1D9] border-l-4 border-l-[#FF5A1F] bg-white p-6">
-              <span className="font-['IBM_Plex_Mono',monospace] text-[12px] uppercase tracking-[0.16em] text-[#6F6C78]">
-                Average response time
-              </span>
-              <p className="mt-2 font-['IBM_Plex_Mono',monospace] text-[28px] font-semibold text-[#FF5A1F]">
+            <div className={`border-l-4 border-l-[#E0480F] p-6 dark:border-l-[#FF5A1F] ${CARD}`}>
+              <span className={SECTION_LABEL}>Average response time</span>
+              <p className="mt-2 text-[28px] font-semibold text-[#E0480F] dark:text-[#FF5A1F]">
                 ‹ 24 hours
               </p>
-              <p className="mt-1 text-[14px] text-[#55525E]">During business days</p>
+              <p className={`mt-1 text-[14px] ${SECONDARY}`}>During business days</p>
             </div>
+          </div>
           </div>
         </div>
       </main>
-
-      <Footer />
     </div>
   );
 }
