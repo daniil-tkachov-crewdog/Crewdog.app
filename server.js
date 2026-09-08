@@ -5,10 +5,12 @@ import path from "node:path";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import OpenAI from "openai";
+import { PDFParse } from "pdf-parse";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-app.use(express.json({ limit: "1mb" }));
+// Raised from 1mb to accommodate base64-encoded CV uploads.
+app.use(express.json({ limit: "15mb" }));
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-4o";
@@ -36,6 +38,61 @@ app.get("/api/models", async (_req, res) => {
   } catch (err) {
     console.error("[/api/models]", err?.message || err);
     res.status(500).json({ error: "Could not load models" });
+  }
+});
+
+// POST /api/extract-cv  { dataBase64, filename? }
+// Decodes an uploaded PDF (CV) into plain text so the frontend can attach it
+// to the user's chat prompt. Returns { text, filename, chars }.
+app.post("/api/extract-cv", async (req, res) => {
+  try {
+    const { dataBase64, filename } = req.body ?? {};
+    if (typeof dataBase64 !== "string" || !dataBase64) {
+      return res.status(400).json({ error: "dataBase64 is required" });
+    }
+
+    // Strip an optional data: URL prefix (e.g. "data:application/pdf;base64,").
+    const b64 = dataBase64.includes(",") ? dataBase64.split(",").pop() : dataBase64;
+    let buf;
+    try {
+      buf = Buffer.from(b64, "base64");
+    } catch {
+      return res.status(400).json({ error: "Invalid base64 data" });
+    }
+
+    // Size guard (10 MB) and PDF signature check.
+    if (buf.length > 10 * 1024 * 1024) {
+      return res.status(413).json({ error: "File too large (max 10MB)" });
+    }
+    if (buf.subarray(0, 5).toString("latin1") !== "%PDF-") {
+      return res.status(400).json({ error: "Only PDF files are supported" });
+    }
+
+    const parser = new PDFParse({ data: new Uint8Array(buf) });
+    let text = "";
+    try {
+      const result = await parser.getText();
+      text = String(result?.text ?? "");
+    } finally {
+      await parser.destroy?.();
+    }
+
+    // Drop pdf-parse page markers like "-- 1 of 3 --" and collapse blank runs.
+    text = text
+      .replace(/^-- \d+ of \d+ --$/gm, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+
+    if (!text) {
+      return res
+        .status(422)
+        .json({ error: "Couldn't read any text from this PDF." });
+    }
+
+    res.json({ text, filename: filename || "CV.pdf", chars: text.length });
+  } catch (err) {
+    console.error("[/api/extract-cv]", err?.message || err);
+    res.status(500).json({ error: "Could not read the PDF." });
   }
 });
 

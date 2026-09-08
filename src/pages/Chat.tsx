@@ -3,9 +3,10 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, Paperclip, X, FileText } from "lucide-react";
 import { Wordmark, ThemeToggle } from "@/components/layout/chrome";
 import { renderRichText } from "@/components/chat/richtext";
+import { extractCv, type AttachedCv } from "@/services/cv";
 import {
   listChats,
   listMessages,
@@ -144,8 +145,13 @@ const Chat: React.FC = () => {
   const [activeId, setActiveId] = React.useState(conversations[0].id);
   const [input, setInput] = React.useState("");
   const [thinking, setThinking] = React.useState(false);
+  // Attached CV (decoded to text) that rides along with the next message.
+  const [cv, setCv] = React.useState<AttachedCv | null>(null);
+  const [cvModalOpen, setCvModalOpen] = React.useState(false);
+  const [cvLoading, setCvLoading] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   // Maps a conversation's local id -> its DB id. A ref so async callbacks
   // (e.g. the delayed assistant reply) always read the latest value.
   const dbIds = React.useRef<Record<string, string>>({});
@@ -240,25 +246,38 @@ const Chat: React.FC = () => {
 
   const send = async () => {
     const text = input.trim();
-    if (!text || thinking) return;
+    const attached = cv;
+    if ((!text && !attached) || thinking) return;
     setInput("");
+    setCv(null);
 
     const convId = activeId;
     const isFirst = active.messages.length === 0;
-    const userMsg: Message = { id: uid(), role: "user", content: text };
-    // Full turn history to send to the model (prior messages + this one).
-    const outgoing = [...active.messages, userMsg].map((m) => ({
-      role: m.role,
-      content: m.content,
-    }));
+    // What we show/store: the typed text plus a light attachment tag.
+    const displayContent = attached
+      ? `${text}${text ? "\n\n" : ""}📎 ${attached.name}`
+      : text;
+    // What the model receives: the typed text plus the full CV text.
+    const apiContent = attached
+      ? `${text}${text ? "\n\n" : ""}Text of the CV (${attached.name}):\n${attached.text}`
+      : text;
 
+    const userMsg: Message = { id: uid(), role: "user", content: displayContent };
+    // Full turn history to send to the model (prior messages + this one).
+    const outgoing = [
+      ...active.messages.map((m) => ({ role: m.role, content: m.content })),
+      { role: "user" as const, content: apiContent },
+    ];
+
+    const titleSource = text || attached?.name || "New chat";
     updateConversation(convId, (c) => ({
       ...c,
-      title: isFirst ? text.slice(0, 40) : c.title,
+      title: isFirst ? titleSource.slice(0, 40) : c.title,
       messages: [...c.messages, userMsg],
     }));
 
-    if (isAuthed && user) void persistUserMessage(convId, text, isFirst);
+    if (isAuthed && user)
+      void persistUserMessage(convId, displayContent, isFirst);
 
     setThinking(true);
     try {
@@ -367,7 +386,27 @@ const Chat: React.FC = () => {
     }
   };
 
-  const canSend = !!input.trim() && !thinking;
+  const handleCvFile = async (file?: File | null) => {
+    if (!file) return;
+    if (file.type !== "application/pdf" && !/\.pdf$/i.test(file.name)) {
+      toast.error("Only PDF files are supported.");
+      return;
+    }
+    setCvLoading(true);
+    try {
+      const parsed = await extractCv(file);
+      setCv(parsed);
+      setCvModalOpen(false);
+      toast.success(`Attached ${parsed.name}`);
+    } catch (e: any) {
+      toast.error(e?.message || "Couldn't read the PDF.");
+    } finally {
+      setCvLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const canSend = (!!input.trim() || !!cv) && !thinking;
 
   return (
     <div className="flex h-screen w-full bg-white font-grotesk text-[#1A1917] dark:bg-[#17161A] dark:text-[#ECEBE8]">
@@ -558,7 +597,31 @@ const Chat: React.FC = () => {
         </div>
 
         <div className="px-6 pb-5">
-          <div className="group mx-auto flex w-full max-w-[720px] items-end gap-[10px] rounded-[24px] border border-[rgba(26,25,23,0.14)] bg-white py-[10px] pl-5 pr-[10px] shadow-[0_6px_20px_-12px_rgba(26,24,20,0.2)] transition-[border-color,box-shadow] duration-200 focus-within:border-[rgba(26,25,23,0.26)] focus-within:shadow-[0_10px_26px_-14px_rgba(26,24,20,0.28)] hover:border-[rgba(26,25,23,0.26)] dark:border-[rgba(255,255,255,0.12)] dark:bg-[#1F1E24] dark:shadow-none dark:focus-within:border-[rgba(255,255,255,0.24)] dark:focus-within:shadow-[0_0_0_4px_rgba(255,255,255,0.04)] dark:hover:border-[rgba(255,255,255,0.24)]">
+          {cv && (
+            <div className="mx-auto mb-2 flex w-full max-w-[720px]">
+              <span className="inline-flex items-center gap-2 rounded-[10px] border border-[rgba(26,25,23,0.14)] bg-[#F7F7F5] py-1.5 pl-3 pr-2 text-[13px] text-[#1A1917] dark:border-[rgba(255,255,255,0.12)] dark:bg-[#141317] dark:text-[#ECEBE8]">
+                <FileText className="h-[14px] w-[14px] text-[#E0480F] dark:text-[#FF5A1F]" />
+                <span className="max-w-[220px] truncate">{cv.name}</span>
+                <button
+                  onClick={() => setCv(null)}
+                  aria-label="Remove attachment"
+                  className="text-[#6E6B64] transition-colors hover:text-[#E0480F] dark:text-[#96938C] dark:hover:text-[#FF5A1F]"
+                >
+                  <X className="h-[14px] w-[14px]" />
+                </button>
+              </span>
+            </div>
+          )}
+          <div className="group mx-auto flex w-full max-w-[720px] items-end gap-[8px] rounded-[24px] border border-[rgba(26,25,23,0.14)] bg-white py-[10px] pl-[10px] pr-[10px] shadow-[0_6px_20px_-12px_rgba(26,24,20,0.2)] transition-[border-color,box-shadow] duration-200 focus-within:border-[rgba(26,25,23,0.26)] focus-within:shadow-[0_10px_26px_-14px_rgba(26,24,20,0.28)] hover:border-[rgba(26,25,23,0.26)] dark:border-[rgba(255,255,255,0.12)] dark:bg-[#1F1E24] dark:shadow-none dark:focus-within:border-[rgba(255,255,255,0.24)] dark:focus-within:shadow-[0_0_0_4px_rgba(255,255,255,0.04)] dark:hover:border-[rgba(255,255,255,0.24)]">
+            <button
+              onClick={() => setCvModalOpen(true)}
+              disabled={thinking}
+              aria-label="Attach your CV (PDF)"
+              title="Attach your CV (PDF)"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[#6E6B64] transition-[background,color] duration-150 hover:bg-[rgba(26,25,23,0.06)] hover:text-[#1A1917] disabled:pointer-events-none disabled:opacity-40 dark:text-[#96938C] dark:hover:bg-[rgba(255,255,255,0.07)] dark:hover:text-[#ECEBE8]"
+            >
+              <Paperclip className="h-[18px] w-[18px]" />
+            </button>
             <textarea
               ref={textareaRef}
               value={input}
@@ -581,6 +644,56 @@ const Chat: React.FC = () => {
             Crewdog can make mistakes. Check important info.
           </p>
         </div>
+
+        {/* Hidden file input, opened by the modal's "Choose file" button. */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/pdf,.pdf"
+          className="hidden"
+          onChange={(e) => handleCvFile(e.target.files?.[0])}
+        />
+
+        {cvModalOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Upload your CV"
+          >
+            <div
+              className="absolute inset-0 bg-black/40"
+              onClick={() => !cvLoading && setCvModalOpen(false)}
+            />
+            <div className="relative w-full max-w-[400px] rounded-[16px] border border-[rgba(26,25,23,0.1)] bg-white p-7 text-center shadow-[0_20px_60px_-20px_rgba(0,0,0,0.4)] dark:border-[rgba(255,255,255,0.1)] dark:bg-[#1F1E24]">
+              <button
+                onClick={() => !cvLoading && setCvModalOpen(false)}
+                aria-label="Close"
+                className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg text-[#6E6B64] transition-colors hover:text-[#1A1917] dark:text-[#96938C] dark:hover:text-[#ECEBE8]"
+              >
+                <X className="h-[18px] w-[18px]" />
+              </button>
+
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#F7F7F5] dark:bg-[#141317]">
+                <FileText className="h-6 w-6 text-[#E0480F] dark:text-[#FF5A1F]" />
+              </div>
+              <h2 className="text-[20px] font-semibold tracking-[-0.01em]">
+                Upload your CV
+              </h2>
+              <p className="mt-1 text-[13px] text-[#6E6B64] dark:text-[#96938C]">
+                only PDF
+              </p>
+
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={cvLoading}
+                className="mt-6 w-full rounded-[10px] bg-[#E0480F] px-[18px] py-[11px] text-[14px] font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-[#FF5A1F] dark:text-[#0B0B0F]"
+              >
+                {cvLoading ? "Reading…" : "Choose file"}
+              </button>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
