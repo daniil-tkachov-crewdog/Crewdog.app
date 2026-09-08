@@ -1,6 +1,7 @@
-import { Link } from "react-router-dom";
-import { Topbar } from "@/components/layout/Topbar";
-import { Footer } from "@/components/layout/Footer";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
+import { Wordmark, ThemeToggle } from "@/components/layout/chrome";
+import { CARD, SECTION_LABEL, SECONDARY, MUTED } from "@/components/account/ui";
 import { motion, useScroll, useSpring } from "framer-motion";
 
 const sections: Array<{
@@ -59,6 +60,7 @@ const sections: Array<{
 ];
 
 export default function Privacy() {
+  const navigate = useNavigate();
   const { scrollYProgress } = useScroll();
   const scaleX = useSpring(scrollYProgress, {
     stiffness: 100,
@@ -67,52 +69,45 @@ export default function Privacy() {
   });
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F4F2EE] text-[#0B0B0F] font-['Space_Grotesk',system-ui,sans-serif]">
+    <div className="flex min-h-screen flex-col bg-white font-grotesk text-[#1A1917] dark:bg-[#17161A] dark:text-[#ECEBE8]">
       {/* Reading progress bar */}
       <motion.div
-        className="fixed left-0 right-0 top-0 z-50 h-1 origin-left bg-[#FF5A1F]"
+        className="fixed left-0 right-0 top-0 z-50 h-1 origin-left bg-[#E0480F] dark:bg-[#FF5A1F]"
         style={{ scaleX }}
       />
 
-      <Topbar />
-
-      {/* ── Hero ── */}
-      <header className="relative overflow-hidden bg-[#0B0B0F] text-white">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-40 -top-20 h-[520px] w-[520px] rounded-full border border-[#FF5A1F]/20 max-[720px]:right-[-220px] max-[720px]:opacity-50"
-        >
-          <div className="absolute inset-20 rounded-full border border-[#FF5A1F]/[0.14]" />
-          <div className="absolute inset-[170px] rounded-full border border-[#FF5A1F]/10" />
-        </div>
-
-        <div className="mx-auto w-full max-w-[1040px] px-6 py-[72px] pb-20">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
+      <header className="flex h-14 shrink-0 items-center justify-between px-6">
+        <Link to="/chat">
+          <Wordmark />
+        </Link>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-[6px] text-[13px] text-[#6E6B64] transition-colors hover:text-[#1A1917] dark:text-[#96938C] dark:hover:text-[#ECEBE8]"
           >
-            <span className="mb-7 block font-['IBM_Plex_Mono',monospace] text-[13px] uppercase tracking-[0.22em] text-[#FF5A1F]">
-              Privacy &amp; security
-            </span>
-            <h1 className="text-[clamp(40px,8vw,76px)] font-bold leading-[0.98] tracking-[-0.03em]">
-              Privacy <em className="not-italic text-[#FF5A1F]">policy.</em>
-            </h1>
-            <p className="mt-[26px] font-['IBM_Plex_Mono',monospace] text-[13px] tracking-[0.06em] text-[#C9C6CF]">
-              Effective date: January 1, 2025
-            </p>
-          </motion.div>
+            <ArrowLeft className="h-[15px] w-[15px]" />
+            Back
+          </button>
+          <ThemeToggle />
         </div>
       </header>
 
-      <main className="flex-1 py-14">
+      <main className="flex-1 pb-16 pt-6">
         <div className="mx-auto w-full max-w-[800px] px-6">
-          <Link
-            to="/"
-            className="mb-8 inline-block font-['IBM_Plex_Mono',monospace] text-[12px] tracking-[0.06em] text-[#6F6C78] transition-colors hover:text-[#0B0B0F]"
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="mb-10"
           >
-            ← Back to home
-          </Link>
+            <span className={SECTION_LABEL}>Privacy &amp; security</span>
+            <h1 className="mt-3 text-[clamp(32px,5vw,44px)] font-semibold leading-[1.05] tracking-[-0.03em]">
+              Privacy policy
+            </h1>
+            <p className={`mt-4 text-[14px] ${MUTED}`}>
+              Effective date: January 1, 2025
+            </p>
+          </motion.div>
 
           <div className="space-y-4">
             {sections.map((section, index) => (
@@ -122,19 +117,19 @@ export default function Privacy() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-50px" }}
                 transition={{ delay: index * 0.04 }}
-                className="rounded-md border border-[#E4E1D9] bg-white p-7 sm:p-8"
+                className={`p-7 sm:p-8 ${CARD}`}
               >
                 <h2 className="text-[20px] font-semibold tracking-[-0.01em] sm:text-[22px]">
                   {section.title}
                 </h2>
-                <p className="mt-3 text-[15px] leading-[1.7] text-[#55525E]">
+                <p className={`mt-3 text-[15px] leading-[1.7] ${SECONDARY}`}>
                   {section.content}
                   {section.hasLink && (
                     <>
                       {" "}
                       <Link
                         to="/support"
-                        className="font-medium text-[#FF5A1F] hover:underline"
+                        className="font-medium text-[#E0480F] hover:underline dark:text-[#FF5A1F]"
                       >
                         support page →
                       </Link>
@@ -146,10 +141,10 @@ export default function Privacy() {
                   <ul className="mt-4 space-y-2.5">
                     {section.list.map((item, i) => (
                       <li key={i} className="flex items-start gap-3">
-                        <span className="mt-[2px] flex-shrink-0 font-['IBM_Plex_Mono',monospace] text-[#FF5A1F]">
+                        <span className="mt-[2px] flex-shrink-0 text-[#E0480F] dark:text-[#FF5A1F]">
                           ›
                         </span>
-                        <span className="text-[15px] leading-[1.6] text-[#55525E]">
+                        <span className={`text-[15px] leading-[1.6] ${SECONDARY}`}>
                           {item}
                         </span>
                       </li>
@@ -161,8 +156,6 @@ export default function Privacy() {
           </div>
         </div>
       </main>
-
-      <Footer />
     </div>
   );
 }
