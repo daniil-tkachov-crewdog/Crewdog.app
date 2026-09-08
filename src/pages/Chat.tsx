@@ -2,9 +2,8 @@ import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { toast } from "sonner";
-import { Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { useTheme } from "next-themes";
+import { Sun, Moon } from "lucide-react";
 import {
   listChats,
   listMessages,
@@ -23,7 +22,6 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
-import logo from "@/assets/CrewDog-App-Logo.png";
 
 type Message = {
   id: string;
@@ -48,9 +46,41 @@ const newConversation = (): Conversation => ({
   loaded: true, // a brand-new local chat has nothing to fetch
 });
 
+// Live-text wordmark: "Crew" in ink, "Dog" in accent. No image asset.
+const Wordmark: React.FC<{ className?: string }> = ({ className }) => (
+  <span
+    className={`flex items-baseline gap-[2px] font-grotesk text-[18px] font-bold tracking-[-0.02em] text-[#1A1917] dark:text-[#ECEBE8] ${className ?? ""}`}
+  >
+    Crew<span className="text-[#E0480F] dark:text-[#FF5A1F]">Dog</span>
+  </span>
+);
+
+const ThemeToggle: React.FC<{ className?: string }> = ({ className }) => {
+  const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
+  const isDark = resolvedTheme === "dark";
+  return (
+    <button
+      type="button"
+      aria-label="Toggle dark mode"
+      title="Toggle dark mode"
+      onClick={() => setTheme(isDark ? "light" : "dark")}
+      className={`flex h-8 w-8 items-center justify-center rounded-lg text-[#6E6B64] transition-[background] duration-150 hover:bg-[rgba(26,25,23,0.06)] dark:text-[#96938C] dark:hover:bg-[rgba(255,255,255,0.07)] ${className ?? ""}`}
+    >
+      {mounted && isDark ? (
+        <Sun className="h-[18px] w-[18px]" />
+      ) : (
+        <Moon className="h-[18px] w-[18px]" />
+      )}
+    </button>
+  );
+};
+
 const Chat: React.FC = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const { resolvedTheme, setTheme } = useTheme();
   const isAuthed = !!user;
 
   const handleLogout = async () => {
@@ -65,6 +95,7 @@ const Chat: React.FC = () => {
   const [input, setInput] = React.useState("");
   const [thinking, setThinking] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   // Maps a conversation's local id -> its DB id. A ref so async callbacks
   // (e.g. the delayed assistant reply) always read the latest value.
   const dbIds = React.useRef<Record<string, string>>({});
@@ -81,6 +112,14 @@ const Chat: React.FC = () => {
       behavior: "smooth",
     });
   }, [active.messages, thinking]);
+
+  // Auto-grow the composer textarea up to its max height, then scroll.
+  React.useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 150)}px`;
+  }, [input]);
 
   const updateConversation = (
     id: string,
@@ -278,54 +317,75 @@ const Chat: React.FC = () => {
     }
   };
 
+  const canSend = !!input.trim() && !thinking;
+
   return (
-    <div className="flex h-screen w-full bg-white text-gray-900">
+    <div className="flex h-screen w-full bg-white font-grotesk text-[#1A1917] dark:bg-[#17161A] dark:text-[#ECEBE8]">
       {/* Sidebar — only for authed users */}
       {isAuthed && (
-        <aside className="hidden w-64 shrink-0 flex-col border-r border-gray-200 bg-gray-50 md:flex">
-          <div className="p-3">
-            <Button
+        <aside className="hidden w-[258px] shrink-0 flex-col bg-[#F7F7F5] dark:bg-[#111014] md:flex">
+          <div className="flex flex-col gap-4 px-4 pb-[14px] pt-[18px]">
+            <Link to="/chat" className="px-[6px]">
+              <Wordmark />
+            </Link>
+            <button
               onClick={startNewChat}
-              variant="outline"
-              className="w-full justify-start gap-2"
+              className="flex items-center gap-[10px] rounded-[10px] px-[10px] py-[9px] text-[14px] font-medium transition-[background] duration-150 hover:bg-[rgba(26,25,23,0.06)] dark:hover:bg-[rgba(255,255,255,0.07)]"
             >
-              <span className="text-lg leading-none">+</span> New chat
-            </Button>
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#1A1917] text-[14px] leading-none text-white dark:bg-[#ECEBE8] dark:text-[#17161A]">
+                +
+              </span>
+              New chat
+            </button>
           </div>
-          <div className="flex-1 overflow-y-auto px-2">
-            <p className="px-2 py-1 text-xs font-medium uppercase text-gray-400">
+
+          <div className="flex-1 overflow-y-auto px-[10px]">
+            <p className="mx-[10px] mb-[6px] text-[11.5px] font-medium tracking-[0.04em] text-[#6E6B64] dark:text-[#96938C]">
               History
             </p>
-            {conversations.map((c) => (
-              <div
-                key={c.id}
-                className={`group mb-1 flex items-center gap-1 rounded-md pr-1 transition ${
-                  c.id === activeId ? "bg-gray-200" : "hover:bg-gray-100"
-                }`}
-              >
-                <button
-                  onClick={() => selectChat(c)}
-                  className={`min-w-0 flex-1 truncate px-2 py-2 text-left text-sm ${
-                    c.id === activeId ? "font-medium" : ""
+            {conversations.map((c) => {
+              const activeRow = c.id === activeId;
+              return (
+                <div
+                  key={c.id}
+                  className={`group flex items-center gap-[6px] rounded-[9px] transition-[background] duration-150 ${
+                    activeRow
+                      ? "bg-[rgba(26,25,23,0.07)] dark:bg-[rgba(255,255,255,0.09)]"
+                      : "hover:bg-[rgba(26,25,23,0.05)] dark:hover:bg-[rgba(255,255,255,0.05)]"
                   }`}
                 >
-                  {c.title}
-                </button>
-                <button
-                  aria-label="Delete chat"
-                  title="Delete chat"
-                  onClick={() => removeChat(c)}
-                  className="shrink-0 rounded p-1 text-gray-400 opacity-0 transition hover:bg-gray-300 hover:text-red-600 focus:opacity-100 group-hover:opacity-100"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
+                  <button
+                    onClick={() => selectChat(c)}
+                    className={`min-w-0 flex-1 truncate px-[10px] py-[9px] text-left text-[13.5px] ${
+                      activeRow
+                        ? "font-medium text-[#1A1917] dark:text-[#ECEBE8]"
+                        : "text-[#5F5D57] dark:text-[#A6A39C]"
+                    }`}
+                  >
+                    {c.title}
+                  </button>
+                  <button
+                    aria-label="Delete chat"
+                    title="Delete chat"
+                    onClick={() => removeChat(c)}
+                    className="mr-[6px] shrink-0 text-[13px] leading-none text-[#6E6B64] opacity-0 transition hover:text-[#E0480F] focus:opacity-100 group-hover:opacity-100 dark:text-[#A6A39C] dark:hover:text-[#FF5A1F]"
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
           </div>
-          <div className="border-t border-gray-200 p-3">
+
+          <div className="p-[10px]">
             <DropdownMenu>
-              <DropdownMenuTrigger className="w-full truncate rounded-md px-2 py-2 text-left text-sm hover:bg-gray-100 focus:outline-none">
-                {user?.email ?? "Profile"}
+              <DropdownMenuTrigger className="flex w-full items-center gap-[10px] rounded-[10px] px-[10px] py-[9px] text-left transition-[background] duration-150 hover:bg-[rgba(26,25,23,0.06)] focus:outline-none dark:hover:bg-[rgba(255,255,255,0.07)]">
+                <span className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-[#E0480F] text-[11px] font-bold text-white dark:bg-[#FF5A1F] dark:text-[#0B0B0F]">
+                  {(user?.email ?? "?").charAt(0).toUpperCase()}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[12.5px] text-[#5F5D57] dark:text-[#A6A39C]">
+                  {user?.email ?? "Profile"}
+                </span>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" side="top" className="w-56">
                 <DropdownMenuItem asChild>
@@ -336,6 +396,14 @@ const Chat: React.FC = () => {
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link to="/settings">Settings</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    setTheme(resolvedTheme === "dark" ? "light" : "dark");
+                  }}
+                >
+                  {resolvedTheme === "dark" ? "Light mode" : "Dark mode"}
                 </DropdownMenuItem>
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger>Help</DropdownMenuSubTrigger>
@@ -368,33 +436,34 @@ const Chat: React.FC = () => {
       )}
 
       {/* Main chat area */}
-      <main className="flex flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-          <Link to="/chat" className="flex items-center gap-2">
-            <img src={logo} alt="Crewdog" className="h-7 w-auto" />
-            <span className="font-semibold">Crewdog</span>
-          </Link>
-          {!isAuthed && (
-            <Link to="/login">
-              <Button size="sm">Log in</Button>
-            </Link>
-          )}
+      <main className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-14 shrink-0 items-center justify-between px-6">
+          <span className="truncate text-[14px] font-medium">
+            {active.messages.length === 0 ? "New chat" : active.title}
+          </span>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            {!isAuthed && (
+              <Link
+                to="/login"
+                className="rounded-[9px] bg-[#E0480F] px-4 py-2 text-[13px] font-medium text-white transition hover:opacity-90 dark:bg-[#FF5A1F] dark:text-[#0B0B0F]"
+              >
+                Log in
+              </Link>
+            )}
+          </div>
         </header>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-2xl px-4 py-6">
+          <div className="mx-auto w-full max-w-[720px] px-6 pb-6 pt-[10px]">
             {active.messages.length === 0 ? (
-              <div className="mt-24 text-center">
-                <img
-                  src={logo}
-                  alt="Crewdog"
-                  className="mx-auto mb-4 h-12 w-auto"
-                />
-                <h1 className="text-2xl font-semibold">
+              <div className="mt-24 flex flex-col items-center text-center">
+                <Wordmark className="mb-6" />
+                <h1 className="text-[32px] font-semibold tracking-[-0.03em]">
                   How can I help you today?
                 </h1>
                 {!isAuthed && (
-                  <p className="mt-2 text-sm text-gray-500">
+                  <p className="mt-3 text-[14.5px] leading-[1.6] text-[#6E6B64] dark:text-[#96938C]">
                     You can chat without an account.{" "}
                     <Link to="/login" className="underline">
                       Log in
@@ -404,30 +473,35 @@ const Chat: React.FC = () => {
                 )}
               </div>
             ) : (
-              <div className="space-y-6">
-                {active.messages.map((m) => (
+              <div className="flex flex-col gap-8">
+                {active.messages.map((m, i) => (
                   <div
                     key={m.id}
-                    className={`flex ${
+                    className={`chat-rise-in flex ${
                       m.role === "user" ? "justify-end" : "justify-start"
                     }`}
+                    style={{ animationDelay: `${Math.min(i * 80, 400)}ms` }}
                   >
-                    <div
-                      className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-4 py-2 text-sm ${
-                        m.role === "user"
-                          ? "bg-gray-900 text-white"
-                          : "bg-gray-100 text-gray-900"
-                      }`}
-                    >
-                      {m.content}
-                    </div>
+                    {m.role === "user" ? (
+                      <div className="max-w-[76%] whitespace-pre-wrap rounded-[18px] bg-[#F1F0EC] px-[18px] py-[13px] text-[15px] leading-[1.6] text-[#1A1917] dark:bg-[#26252B] dark:text-[#F3F2EF]">
+                        {m.content}
+                      </div>
+                    ) : (
+                      <div className="w-full whitespace-pre-wrap text-[16px] leading-[1.75] text-[#25231F] [text-wrap:pretty] dark:text-[#DEDCD7]">
+                        {m.content}
+                      </div>
+                    )}
                   </div>
                 ))}
                 {thinking && (
-                  <div className="flex justify-start">
-                    <div className="rounded-2xl bg-gray-100 px-4 py-2 text-sm text-gray-500">
-                      Thinking…
-                    </div>
+                  <div className="chat-rise-in flex items-center gap-[5px]">
+                    {[0, 0.18, 0.36].map((d) => (
+                      <span
+                        key={d}
+                        className="chat-dot h-[7px] w-[7px] rounded-full bg-[#B6B3AA] dark:bg-[#6C6963]"
+                        style={{ animationDelay: `${d}s` }}
+                      />
+                    ))}
                   </div>
                 )}
               </div>
@@ -435,21 +509,27 @@ const Chat: React.FC = () => {
           </div>
         </div>
 
-        <div className="border-t border-gray-200 px-4 py-3">
-          <div className="mx-auto flex w-full max-w-2xl items-end gap-2">
-            <Textarea
+        <div className="px-6 pb-5">
+          <div className="group mx-auto flex w-full max-w-[720px] items-end gap-[10px] rounded-[24px] border border-[rgba(26,25,23,0.14)] bg-white py-[10px] pl-5 pr-[10px] shadow-[0_6px_20px_-12px_rgba(26,24,20,0.2)] transition-[border-color,box-shadow] duration-200 focus-within:border-[rgba(26,25,23,0.26)] focus-within:shadow-[0_10px_26px_-14px_rgba(26,24,20,0.28)] hover:border-[rgba(26,25,23,0.26)] dark:border-[rgba(255,255,255,0.12)] dark:bg-[#1F1E24] dark:shadow-none dark:focus-within:border-[rgba(255,255,255,0.24)] dark:focus-within:shadow-[0_0_0_4px_rgba(255,255,255,0.04)] dark:hover:border-[rgba(255,255,255,0.24)]">
+            <textarea
+              ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKeyDown}
               placeholder="Message Crewdog…"
               rows={1}
-              className="max-h-40 min-h-[44px] resize-none"
+              className="max-h-[150px] min-h-[30px] flex-1 resize-none bg-transparent py-[5px] text-[15px] leading-[1.55] text-[#1A1917] outline-none placeholder:text-[#6E6B64] dark:text-[#ECEBE8] dark:placeholder:text-[#96938C]"
             />
-            <Button onClick={send} disabled={!input.trim() || thinking}>
-              Send
-            </Button>
+            <button
+              onClick={send}
+              disabled={!canSend}
+              aria-label="Send message"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#1A1917] text-[15px] text-white transition-[transform,background] duration-200 hover:-translate-y-[2px] hover:bg-[#E0480F] disabled:pointer-events-none disabled:opacity-40 dark:bg-[#ECEBE8] dark:text-[#17161A] dark:hover:bg-[#FF5A1F] dark:hover:text-white"
+            >
+              ↑
+            </button>
           </div>
-          <p className="mx-auto mt-2 max-w-2xl text-center text-xs text-gray-400">
+          <p className="mx-auto mt-[10px] max-w-[720px] text-center text-[11.5px] text-[#6E6B64] dark:text-[#96938C]">
             Crewdog can make mistakes. Check important info.
           </p>
         </div>

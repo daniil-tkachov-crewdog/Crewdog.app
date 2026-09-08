@@ -37,7 +37,7 @@ function AnalyticsBoot() {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
-      <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} forcedTheme="light">
+      <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
         <TooltipProvider>
           <Toaster />
           <Sonner />

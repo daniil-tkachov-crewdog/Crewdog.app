@@ -132,6 +132,25 @@ All colors MUST be HSL.
     animation-delay: 400ms;
   }
 
+  /* Chat redesign — message entry + thinking dots */
+  .chat-rise-in {
+    animation: chat-rise-in 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes chat-rise-in {
+    0% { opacity: 0; transform: translateY(14px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  .chat-dot {
+    animation: chat-dot 1.3s infinite ease-in-out;
+  }
+  @keyframes chat-dot {
+    0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+    40% { opacity: 1; transform: translateY(-3px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .chat-rise-in, .chat-dot { animation: none; }
+  }
+
   /* Radar run-page scanline (loading state) */
   .radar-scanline {
     position: relative;
