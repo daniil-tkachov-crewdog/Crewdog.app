@@ -113,12 +113,6 @@ export default function AccountPage() {
           <Wordmark />
         </Link>
         <div className="flex items-center gap-1">
-          <Link
-            to="/run"
-            className="rounded-lg px-3 py-[6px] text-[13px] text-[#6E6B64] transition-colors hover:text-[#1A1917] dark:text-[#96938C] dark:hover:text-[#ECEBE8]"
-          >
-            ← Dashboard
-          </Link>
           <ThemeToggle />
           <button
             onClick={async () => {
