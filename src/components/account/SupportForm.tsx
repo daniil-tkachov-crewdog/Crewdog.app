@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { sendSupportMessage } from "@/services/support";
+import { CARD, INPUT, BTN_ACCENT, SECTION_LABEL, FIELD_LABEL, SECONDARY, BORDER } from "./ui";
 
-const MONO_LABEL =
-  "block font-['IBM_Plex_Mono',monospace] text-[12px] uppercase tracking-[0.08em] text-[#6F6C78] mb-[10px]";
-const INPUT =
-  "w-full font-['Space_Grotesk',sans-serif] text-[15px] text-[#0B0B0F] bg-[#F4F2EE] border border-[#E4E1D9] rounded-[3px] px-[14px] py-[12px] transition-colors focus:outline-none focus:border-[#FF5A1F] disabled:opacity-50";
+const MONO_LABEL = FIELD_LABEL;
 
 export default function SupportForm({ userEmail }: { userEmail: string }) {
   const [topic, setTopic] = useState<string>("");
@@ -13,11 +11,9 @@ export default function SupportForm({ userEmail }: { userEmail: string }) {
 
   return (
     <section>
-      <span className="font-['IBM_Plex_Mono',monospace] text-[13px] uppercase tracking-[0.2em] text-[#FF5A1F]">
-        // contact support
-      </span>
+      <span className={SECTION_LABEL}>Contact support</span>
 
-      <div className="mt-5 rounded-md border border-[#E4E1D9] bg-white p-6 sm:p-8">
+      <div className={`mt-5 p-6 sm:p-8 ${CARD}`}>
         <form
           className="space-y-5"
           onSubmit={async (e) => {
@@ -103,15 +99,15 @@ export default function SupportForm({ userEmail }: { userEmail: string }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-[2px] bg-[#FF5A1F] px-[22px] py-[13px] font-['Space_Grotesk',sans-serif] text-[15px] font-semibold text-[#0B0B0F] transition-transform hover:-translate-y-0.5 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40"
+            className={`w-full py-[13px] text-[15px] ${BTN_ACCENT}`}
           >
             {loading ? "Sending..." : "Send message"}
           </button>
         </form>
 
-        <div className="mt-7 border-t border-[#E4E1D9] pt-6 text-center">
+        <div className={`mt-7 border-t pt-6 text-center ${BORDER}`}>
           <h3 className="mb-1 text-[15px] font-semibold">Need immediate help?</h3>
-          <p className="text-[14px] text-[#55525E]">
+          <p className={`text-[14px] ${SECONDARY}`}>
             Check our FAQs or visit the support center.
           </p>
         </div>

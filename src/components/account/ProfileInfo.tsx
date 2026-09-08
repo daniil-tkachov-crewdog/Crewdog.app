@@ -1,15 +1,9 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import type { AccountUser } from "../data/account.types";
+import { CARD, INPUT, BTN_PRIMARY, BTN_GHOST, SECTION_LABEL, FIELD_LABEL, MUTED } from "./ui";
 
-const MONO_LABEL =
-  "font-['IBM_Plex_Mono',monospace] text-[12px] uppercase tracking-[0.08em] text-[#6F6C78]";
-const INPUT =
-  "w-full font-['Space_Grotesk',sans-serif] text-[15px] text-[#0B0B0F] bg-[#F4F2EE] border border-[#E4E1D9] rounded-[3px] px-[14px] py-[12px] transition-colors focus:outline-none focus:border-[#FF5A1F]";
-const BTN_PRIMARY =
-  "rounded-[2px] bg-[#FF5A1F] px-[18px] py-[10px] font-['Space_Grotesk',sans-serif] text-[14px] font-semibold text-[#0B0B0F] transition-transform hover:-translate-y-0.5";
-const BTN_GHOST =
-  "rounded-[2px] border border-[#E4E1D9] px-[18px] py-[10px] text-[14px] font-medium transition-colors hover:border-[#FF5A1F]";
+const MONO_LABEL = FIELD_LABEL;
 
 export default function ProfileInfo({ user }: { user: AccountUser }) {
   const [isEditingName, setIsEditingName] = useState(false);
@@ -31,13 +25,11 @@ export default function ProfileInfo({ user }: { user: AccountUser }) {
 
   return (
     <section>
-      <span className="font-['IBM_Plex_Mono',monospace] text-[13px] uppercase tracking-[0.2em] text-[#FF5A1F]">
-        // profile information
-      </span>
+      <span className={SECTION_LABEL}>Profile information</span>
 
       <div className="mt-5 grid gap-5 md:grid-cols-2">
         {/* Name */}
-        <div className="group rounded-md border border-[#E4E1D9] bg-white p-6">
+        <div className={`group p-6 ${CARD}`}>
           <div className={MONO_LABEL + " mb-3"}>Full name</div>
 
           {isEditingName ? (
@@ -62,7 +54,7 @@ export default function ProfileInfo({ user }: { user: AccountUser }) {
               <span className="text-[17px] font-medium">{user.name}</span>
               <button
                 onClick={() => setIsEditingName(true)}
-                className="font-['IBM_Plex_Mono',monospace] text-[11px] uppercase tracking-[0.06em] text-[#6F6C78] opacity-0 transition-opacity hover:text-[#FF5A1F] group-hover:opacity-100"
+                className={`text-[11px] font-medium uppercase tracking-[0.04em] opacity-0 transition-opacity hover:text-[#E0480F] group-hover:opacity-100 dark:hover:text-[#FF5A1F] ${MUTED}`}
               >
                 Edit
               </button>
@@ -71,7 +63,7 @@ export default function ProfileInfo({ user }: { user: AccountUser }) {
         </div>
 
         {/* Email */}
-        <div className="group rounded-md border border-[#E4E1D9] bg-white p-6">
+        <div className={`group p-6 ${CARD}`}>
           <div className={MONO_LABEL + " mb-3"}>Email address</div>
 
           {isEditingEmail ? (
@@ -97,7 +89,7 @@ export default function ProfileInfo({ user }: { user: AccountUser }) {
               <span className="truncate text-[17px] font-medium">{user.email}</span>
               <button
                 onClick={() => setIsEditingEmail(true)}
-                className="flex-shrink-0 font-['IBM_Plex_Mono',monospace] text-[11px] uppercase tracking-[0.06em] text-[#6F6C78] opacity-0 transition-opacity hover:text-[#FF5A1F] group-hover:opacity-100"
+                className={`flex-shrink-0 text-[11px] font-medium uppercase tracking-[0.04em] opacity-0 transition-opacity hover:text-[#E0480F] group-hover:opacity-100 dark:hover:text-[#FF5A1F] ${MUTED}`}
               >
                 Edit
               </button>

@@ -5,8 +5,8 @@ import { useAuth } from "@/auth/AuthProvider";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HelpCircle, History, Settings, User } from "lucide-react";
-import { Topbar } from "@/components/layout/Topbar";
-import { Footer } from "@/components/layout/Footer";
+import { Wordmark, ThemeToggle } from "@/components/layout/chrome";
+import { CARD } from "@/components/account/ui";
 import DownsellModal from "@/components/account/DownsellModal";
 import CancelSurveyModal from "@/components/account/CancelSurveyModal";
 import SupportForm from "@/components/account/SupportForm";
@@ -104,41 +104,45 @@ export default function AccountPage() {
   };
 
   const tabCls =
-    "flex items-center justify-center gap-2 rounded-[3px] border px-3 py-[10px] font-['IBM_Plex_Mono',monospace] text-[12px] uppercase tracking-[0.08em] transition-colors data-[state=active]:border-[#FF5A1F] data-[state=active]:bg-[#FF5A1F] data-[state=active]:text-[#0B0B0F] data-[state=inactive]:border-[#E4E1D9] data-[state=inactive]:text-[#6F6C78] data-[state=inactive]:hover:border-[#FF5A1F]";
+    "flex items-center justify-center gap-2 rounded-[10px] px-3 py-[9px] text-[13px] font-medium transition-colors data-[state=active]:bg-[rgba(26,25,23,0.07)] data-[state=active]:text-[#1A1917] data-[state=inactive]:text-[#6E6B64] data-[state=inactive]:hover:bg-[rgba(26,25,23,0.05)] dark:data-[state=active]:bg-[rgba(255,255,255,0.09)] dark:data-[state=active]:text-[#ECEBE8] dark:data-[state=inactive]:text-[#96938C] dark:data-[state=inactive]:hover:bg-[rgba(255,255,255,0.05)]";
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F4F2EE] text-[#0B0B0F] font-['Space_Grotesk',system-ui,sans-serif]">
-      <Topbar />
+    <div className="flex min-h-screen flex-col bg-white font-grotesk text-[#1A1917] dark:bg-[#17161A] dark:text-[#ECEBE8]">
+      <header className="flex h-14 shrink-0 items-center justify-between px-6">
+        <Link to="/chat">
+          <Wordmark />
+        </Link>
+        <div className="flex items-center gap-1">
+          <Link
+            to="/run"
+            className="rounded-lg px-3 py-[6px] text-[13px] text-[#6E6B64] transition-colors hover:text-[#1A1917] dark:text-[#96938C] dark:hover:text-[#ECEBE8]"
+          >
+            ← Dashboard
+          </Link>
+          <ThemeToggle />
+          <button
+            onClick={async () => {
+              await signOut();
+              toast.success("Logged out successfully");
+              navigate("/");
+            }}
+            className="rounded-lg px-3 py-[6px] text-[13px] text-[#6E6B64] transition-colors hover:text-[#E0480F] dark:text-[#96938C] dark:hover:text-[#FF5A1F]"
+          >
+            Log out
+          </button>
+        </div>
+      </header>
 
-      <main className="flex-1 py-14">
+      <main className="flex-1 pb-16 pt-6">
         <div className="mx-auto w-full max-w-[1040px] px-6">
-          <div className="mb-6 flex items-center justify-between gap-4">
-            <Link
-              to="/run"
-              className="font-['IBM_Plex_Mono',monospace] text-[12px] tracking-[0.06em] text-[#6F6C78] transition-colors hover:text-[#0B0B0F]"
-            >
-              ← Back to dashboard
-            </Link>
-            <button
-              onClick={async () => {
-                await signOut();
-                toast.success("Logged out successfully");
-                navigate("/");
-              }}
-              className="font-['IBM_Plex_Mono',monospace] text-[12px] tracking-[0.06em] text-[#6F6C78] transition-colors hover:text-[#FF5A1F]"
-            >
-              Logout →
-            </button>
-          </div>
-
           <AccountHeader user={user} summary={summary} />
 
-          <div className="mt-6 rounded-md border border-[#E4E1D9] bg-white px-6 py-7 sm:px-8">
+          <div className={`mt-6 px-5 py-6 sm:px-7 ${CARD}`}>
             <Tabs
               value={activeTab}
               onValueChange={(v) => setActiveTab(v as typeof activeTab)}
             >
-              <TabsList className="mb-8 grid h-auto w-full grid-cols-4 gap-2 bg-transparent p-0">
+              <TabsList className="mb-8 grid h-auto w-full grid-cols-4 gap-1 bg-transparent p-0">
                 <TabsTrigger value="general" className={tabCls}>
                   <User className="h-4 w-4" />
                   <span className="hidden sm:inline">Profile</span>
@@ -194,8 +198,6 @@ export default function AccountPage() {
         onAccept={handleAcceptDownsell}
         onCancelAnyway={handleCancelFinalize}
       />
-
-      <Footer />
     </div>
   );
 }

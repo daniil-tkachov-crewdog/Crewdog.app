@@ -19,6 +19,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  CARD,
+  PANEL,
+  BTN_ACCENT as BTN_PRIMARY,
+  BTN_GHOST,
+  SECTION_LABEL,
+  SECONDARY,
+  MUTED,
+  BORDER,
+} from "./ui";
 
 type Props = {
   user: AccountUser;
@@ -26,13 +36,6 @@ type Props = {
   onRefresh: () => Promise<void> | void;
   onCancel: () => void;
 };
-
-const BTN_PRIMARY =
-  "rounded-[2px] bg-[#FF5A1F] px-[22px] py-[13px] font-['Space_Grotesk',sans-serif] text-[14px] font-semibold text-[#0B0B0F] transition-transform hover:-translate-y-0.5 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40";
-const BTN_GHOST =
-  "rounded-[2px] border border-[#E4E1D9] px-[22px] py-[13px] text-[14px] font-medium transition-colors hover:border-[#FF5A1F] disabled:opacity-40";
-const MONO =
-  "font-['IBM_Plex_Mono',monospace] tracking-[0.06em]";
 
 export default function SubscriptionCard({
   user,
@@ -152,63 +155,61 @@ export default function SubscriptionCard({
 
   return (
     <section>
-      <span className="font-['IBM_Plex_Mono',monospace] text-[13px] uppercase tracking-[0.2em] text-[#FF5A1F]">
-        // subscription
-      </span>
+      <span className={SECTION_LABEL}>Subscription</span>
 
-      <div className="mt-5 rounded-md border border-[#E4E1D9] bg-white p-6 sm:p-8">
+      <div className={`mt-5 p-6 sm:p-8 ${CARD}`}>
         <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
           {/* LEFT */}
           <div className="flex-1 space-y-4">
             <div className="flex flex-wrap items-center gap-3">
-              <span className="rounded-[2px] bg-[#0B0B0F] px-4 py-2 font-['IBM_Plex_Mono',monospace] text-[13px] uppercase tracking-[0.08em] text-[#FF5A1F]">
+              <span className="rounded-full bg-[#1A1917] px-4 py-[6px] text-[13px] font-medium uppercase tracking-[0.04em] text-[#FF5A1F] dark:bg-[#ECEBE8] dark:text-[#E0480F]">
                 {planLabel}
               </span>
               {(pro || unlimited) && (
-                <span className={MONO + " flex items-center gap-1.5 text-[12px] text-[#FF5A1F]"}>
-                  <span className="h-[6px] w-[6px] rounded-full bg-[#FF5A1F]" />
+                <span className="flex items-center gap-1.5 text-[12px] text-[#E0480F] dark:text-[#FF5A1F]">
+                  <span className="h-[6px] w-[6px] rounded-full bg-[#E0480F] dark:bg-[#FF5A1F]" />
                   Active
                 </span>
               )}
             </div>
-            <p className="max-w-md text-[15px] leading-[1.6] text-[#55525E]">
+            <p className={`max-w-md text-[15px] leading-[1.6] ${SECONDARY}`}>
               {planSubtitle}
             </p>
           </div>
 
           {/* RIGHT — quota */}
           <div className="flex-1 space-y-5 lg:max-w-md">
-            <div className="rounded-[4px] border border-[#E4E1D9] bg-[#F4F2EE] p-5 sm:p-6">
+            <div className={`p-5 sm:p-6 ${PANEL}`}>
               <div className="flex items-center justify-between">
-                <span className={MONO + " text-[11px] uppercase text-[#6F6C78]"}>
+                <span className={`text-[11px] uppercase ${MUTED}`}>
                   Monthly quota
                 </span>
-                <span className={MONO + " text-[13px] font-semibold text-[#0B0B0F]"}>
+                <span className="text-[13px] font-semibold text-[#1A1917] dark:text-[#ECEBE8]">
                   {unlimited ? "Unlimited ∞" : `${used} / ${cap}`}
                 </span>
               </div>
 
               {/* Progress */}
               <div className="mt-4">
-                <div className="h-[8px] overflow-hidden rounded-full bg-[#E4E1D9]">
+                <div className="h-[8px] overflow-hidden rounded-full bg-[rgba(26,25,23,0.1)] dark:bg-[rgba(255,255,255,0.1)]">
                   <div
-                    className="h-full rounded-full bg-[#FF5A1F] transition-[width] duration-700"
+                    className="h-full rounded-full bg-[#E0480F] transition-[width] duration-700 dark:bg-[#FF5A1F]"
                     style={{ width: `${quotaPct}%` }}
                   />
                 </div>
                 {!unlimited && quotaPct >= 90 && (
-                  <p className={MONO + " mt-2 text-[11px] text-[#FF5A1F]"}>
+                  <p className="mt-2 text-[11px] text-[#E0480F] dark:text-[#FF5A1F]">
                     ⚠ Running low on searches
                   </p>
                 )}
               </div>
 
-              <div className="mt-4 flex items-center justify-between border-t border-[#E4E1D9] pt-3">
-                <span className={MONO + " text-[11px] text-[#6F6C78]"}>
+              <div className={`mt-4 flex items-center justify-between border-t pt-3 ${BORDER}`}>
+                <span className={`text-[11px] ${MUTED}`}>
                   {getRenewalLabel()}
                 </span>
                 {!unlimited && (
-                  <span className={MONO + " text-[11px] font-semibold text-[#0B0B0F]"}>
+                  <span className="text-[11px] font-semibold text-[#1A1917] dark:text-[#ECEBE8]">
                     {remaining} left
                   </span>
                 )}
@@ -238,14 +239,14 @@ export default function SubscriptionCard({
               {pro && !cancelAtPeriodEnd && (
                 <button
                   onClick={onCancel}
-                  className="rounded-[2px] border border-[#E4E1D9] px-[22px] py-[13px] text-[14px] font-medium text-[#55525E] transition-colors hover:border-red-400 hover:text-red-600"
+                  className={`rounded-[10px] border px-[18px] py-[10px] text-[14px] font-medium transition-colors hover:border-red-400 hover:text-red-600 ${SECONDARY} ${BORDER}`}
                 >
                   Cancel
                 </button>
               )}
 
               {pro && cancelAtPeriodEnd && (
-                <div className={MONO + " rounded-[2px] border border-[#FF5A1F]/40 bg-[#FF5A1F]/[0.06] px-4 py-2 text-[12px] text-[#FF5A1F]"}>
+                <div className="rounded-[10px] border border-[#E0480F]/40 bg-[#E0480F]/[0.06] px-4 py-2 text-[12px] text-[#E0480F] dark:border-[#FF5A1F]/40 dark:bg-[#FF5A1F]/[0.08] dark:text-[#FF5A1F]">
                   ⚠ Subscription ends on{" "}
                   {renewalDate
                     ? new Date(renewalDate).toLocaleDateString(undefined, {
@@ -263,15 +264,13 @@ export default function SubscriptionCard({
 
       {/* PLAN MODAL */}
       <Dialog open={planDialogOpen} onOpenChange={setPlanDialogOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto rounded-md border border-[#E4E1D9] bg-[#F4F2EE] p-6 font-['Space_Grotesk',system-ui,sans-serif] text-[#0B0B0F] sm:max-w-3xl sm:p-8">
+        <DialogContent className="max-h-[90vh] overflow-y-auto rounded-[14px] border border-[rgba(26,25,23,0.1)] bg-white p-6 font-grotesk text-[#1A1917] dark:border-[rgba(255,255,255,0.1)] dark:bg-[#1F1E24] dark:text-[#ECEBE8] sm:max-w-3xl sm:p-8">
           <DialogHeader>
-            <span className="font-['IBM_Plex_Mono',monospace] text-[12px] uppercase tracking-[0.16em] text-[#FF5A1F]">
-              Upgrade your plan
-            </span>
-            <DialogTitle className="mt-2 text-[26px] tracking-[-0.02em]">
+            <span className={SECTION_LABEL}>Upgrade your plan</span>
+            <DialogTitle className="mt-2 text-[26px] font-semibold tracking-[-0.02em]">
               Choose a plan
             </DialogTitle>
-            <DialogDescription className="text-[15px] text-[#55525E]">
+            <DialogDescription className={`text-[15px] ${SECONDARY}`}>
               Choose the plan that fits your hiring volume.
             </DialogDescription>
           </DialogHeader>
@@ -285,14 +284,14 @@ export default function SubscriptionCard({
                   type="button"
                   onClick={() => setSelectedPlan(p.code)}
                   className={
-                    "relative rounded-md border bg-white px-5 py-5 text-left transition-colors " +
+                    "relative rounded-[12px] border bg-[#F7F7F5] px-5 py-5 text-left transition-colors dark:bg-[#141317] " +
                     (active
-                      ? "border-[#FF5A1F] ring-1 ring-[#FF5A1F]"
-                      : "border-[#E4E1D9] hover:border-[#FF5A1F]")
+                      ? "border-[#E0480F] ring-1 ring-[#E0480F] dark:border-[#FF5A1F] dark:ring-[#FF5A1F]"
+                      : "border-[rgba(26,25,23,0.1)] hover:border-[#E0480F] dark:border-[rgba(255,255,255,0.1)] dark:hover:border-[#FF5A1F]")
                   }
                 >
                   {p.highlight && (
-                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-[2px] bg-[#FF5A1F] px-3 py-1 font-['IBM_Plex_Mono',monospace] text-[10px] font-bold uppercase tracking-[0.06em] text-[#0B0B0F]">
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[#E0480F] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.04em] text-white dark:bg-[#FF5A1F] dark:text-[#0B0B0F]">
                       Most popular
                     </span>
                   )}
@@ -300,10 +299,10 @@ export default function SubscriptionCard({
                     <div>
                       <span className="flex items-center gap-2 text-[18px] font-semibold tracking-[-0.01em]">
                         {p.name}
-                        {active && <span className="text-[#FF5A1F]">✓</span>}
+                        {active && <span className="text-[#E0480F] dark:text-[#FF5A1F]">✓</span>}
                       </span>
-                      <div className={MONO + " mt-1.5 text-[12px] text-[#6F6C78]"}>
-                        <span className="font-semibold text-[#0B0B0F]">
+                      <div className={`mt-1.5 text-[12px] ${MUTED}`}>
+                        <span className="font-semibold text-[#1A1917] dark:text-[#ECEBE8]">
                           {p.searches}
                         </span>{" "}
                         searches / month
@@ -313,19 +312,19 @@ export default function SubscriptionCard({
                       <div className="text-[20px] font-bold">
                         {p.price.split("/")[0]}
                       </div>
-                      <div className={MONO + " text-[10px] text-[#6F6C78]"}>
+                      <div className={`text-[10px] ${MUTED}`}>
                         per month
                       </div>
                     </div>
                   </div>
-                  <div className="mt-3 space-y-1.5 border-t border-[#E4E1D9] pt-3">
+                  <div className={`mt-3 space-y-1.5 border-t pt-3 ${BORDER}`}>
                     {["Instant activation", "Auto-renews monthly", "Cancel anytime"].map(
                       (f) => (
                         <div
                           key={f}
-                          className={MONO + " flex items-center gap-2 text-[11px] text-[#6F6C78]"}
+                          className={`flex items-center gap-2 text-[11px] ${MUTED}`}
                         >
-                          <span className="text-[#FF5A1F]">›</span> {f}
+                          <span className="text-[#E0480F] dark:text-[#FF5A1F]">›</span> {f}
                         </div>
                       )
                     )}
