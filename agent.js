@@ -45,39 +45,56 @@ function parseJson(text, fallback) {
   }
 }
 
-export async function runJobSearch(openai, jd, cfg = {}, model = "gpt-4o") {
+export async function runJobSearch(openai, args = {}, cfg = {}, model = "gpt-4o") {
   const c = { ...DEFAULTS, ...cfg };
   const usage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
-  const jobDescription = String(jd ?? "").slice(0, 12000);
 
-  // 1) Extract company / title / location.
-  const extractResp = await openai.responses.create({
-    model,
-    instructions: c.extract_instructions,
-    input: `Job description:\n${jobDescription}\n\nReturn ONLY JSON: {"company": string, "company_simplified": string, "title": string, "location": string}`,
-  });
-  addUsage(usage, extractResp);
-  const extracted = parseJson(outputText(extractResp), {
-    company: "",
-    company_simplified: "",
-    title: "",
-    location: "",
-  });
+  // `args` may be a raw JD string (legacy) or an object with optional fields.
+  const a = typeof args === "string" ? { job_description: args } : args ?? {};
+  const jobDescription = String(a.job_description ?? "").slice(0, 12000);
 
-  // 2) Verify the company (web search).
-  const verifyResp = await openai.responses.create({
-    model,
-    instructions: c.verify_instructions,
-    tools: [{ type: "web_search" }],
-    input: `Company: ${extracted.company || extracted.company_simplified}\nLocation: ${extracted.location}\n\nReturn ONLY JSON: {"exists": boolean, "canonical_name": string, "domain": string, "note": string}`,
-  });
-  addUsage(usage, verifyResp);
-  const verification = parseJson(outputText(verifyResp), {
+  let extracted;
+  if (jobDescription.trim()) {
+    // 1a) Job description given -> extract company / title / location.
+    const extractResp = await openai.responses.create({
+      model,
+      instructions: c.extract_instructions,
+      input: `Job description:\n${jobDescription}\n\nReturn ONLY JSON: {"company": string, "company_simplified": string, "title": string, "location": string}`,
+    });
+    addUsage(usage, extractResp);
+    extracted = parseJson(outputText(extractResp), {
+      company: "",
+      company_simplified: "",
+      title: "",
+      location: "",
+    });
+  } else {
+    // 1b) No JD -> direct connection search from the user's criteria.
+    extracted = {
+      company: String(a.company ?? ""),
+      company_simplified: String(a.company ?? ""),
+      title: String(a.role ?? ""),
+      location: String(a.location ?? ""),
+    };
+  }
+
+  // 2) Verify the company (web search) — only when a company is known.
+  let verification = {
     exists: null,
     canonical_name: extracted.company,
     domain: "",
-    note: "",
-  });
+    note: extracted.company ? "" : "No company specified; verification skipped.",
+  };
+  if ((extracted.company || extracted.company_simplified).trim()) {
+    const verifyResp = await openai.responses.create({
+      model,
+      instructions: c.verify_instructions,
+      tools: [{ type: "web_search" }],
+      input: `Company: ${extracted.company || extracted.company_simplified}\nLocation: ${extracted.location}\n\nReturn ONLY JSON: {"exists": boolean, "canonical_name": string, "domain": string, "note": string}`,
+    });
+    addUsage(usage, verifyResp);
+    verification = parseJson(outputText(verifyResp), verification);
+  }
 
   const companyForSearch =
     verification.canonical_name || extracted.company || extracted.company_simplified;

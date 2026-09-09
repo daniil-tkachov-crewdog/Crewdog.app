@@ -124,16 +124,28 @@ app.post("/api/chat", async (req, res) => {
         type: "function",
         name: "find_linkedin_connections",
         description:
-          "Run the job-search pipeline on a job description: extract the company/title/location, verify the company, and find relevant LinkedIn profiles (HR/recruiters and potential connections). Call this whenever the user provides a job description.",
+          "Find relevant LinkedIn profiles (HR/recruiters and potential connections). Call this whenever the user pastes a job description, OR whenever they directly ask to find people/recruiters/connections (e.g. 'find recruiters at Spotify in Berlin'). Pass the job description when there is one; otherwise pass whatever company/role/location the user specified.",
         parameters: {
           type: "object",
           properties: {
             job_description: {
               type: "string",
-              description: "The full job description text pasted by the user.",
+              description: "The full job description text, if the user provided one. Leave empty for a direct connection search.",
+            },
+            company: {
+              type: "string",
+              description: "Target company, when no job description is given.",
+            },
+            role: {
+              type: "string",
+              description: "Role/title of interest, when no job description is given.",
+            },
+            location: {
+              type: "string",
+              description: "Location to focus the search on, when no job description is given.",
             },
           },
-          required: ["job_description"],
+          required: [],
           additionalProperties: false,
         },
       });
@@ -189,7 +201,7 @@ app.post("/api/chat", async (req, res) => {
           const args = JSON.parse(call.arguments || "{}");
           const { result, usage: pu } = await runJobSearch(
             openai,
-            args.job_description,
+            args,
             agent?.config ?? {},
             activeModel
           );
