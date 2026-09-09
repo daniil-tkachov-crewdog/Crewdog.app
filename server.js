@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import OpenAI from "openai";
 import { PDFParse } from "pdf-parse";
+import { runJobSearch } from "./agent.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -99,15 +100,44 @@ app.post("/api/extract-cv", async (req, res) => {
 // POST /api/chat  { messages: [{role, content}], model?, webSearch? }
 app.post("/api/chat", async (req, res) => {
   try {
-    const { messages, model, webSearch, fileSearch, systemPrompt: sysOverride, userPromptAddition } =
-      req.body ?? {};
+    const {
+      messages,
+      model,
+      webSearch,
+      fileSearch,
+      systemPrompt: sysOverride,
+      userPromptAddition,
+      agent,
+    } = req.body ?? {};
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: "messages[] is required" });
     }
 
+    const activeModel = model || DEFAULT_MODEL;
+    const agentEnabled = !!agent?.enabled;
+
     const tools = [];
     if (webSearch) tools.push({ type: "web_search" });
     if (fileSearch) tools.push({ type: "file_search" });
+    if (agentEnabled) {
+      tools.push({
+        type: "function",
+        name: "find_linkedin_connections",
+        description:
+          "Run the job-search pipeline on a job description: extract the company/title/location, verify the company, and find relevant LinkedIn profiles (HR/recruiters and potential connections). Call this whenever the user provides a job description.",
+        parameters: {
+          type: "object",
+          properties: {
+            job_description: {
+              type: "string",
+              description: "The full job description text pasted by the user.",
+            },
+          },
+          required: ["job_description"],
+          additionalProperties: false,
+        },
+      });
+    }
 
     const instructions =
       (typeof sysOverride === "string" && sysOverride.trim()) ||
@@ -129,22 +159,67 @@ app.post("/api/chat", async (req, res) => {
       }
     }
 
-    const response = await openai.responses.create({
-      model: model || DEFAULT_MODEL,
+    const usage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
+    const bumpUsage = (r) => {
+      const u = r?.usage ?? {};
+      usage.input_tokens += u.input_tokens ?? 0;
+      usage.output_tokens += u.output_tokens ?? 0;
+      usage.total_tokens += u.total_tokens ?? 0;
+    };
+
+    let response = await openai.responses.create({
+      model: activeModel,
       instructions,
       input,
       tools: tools.length ? tools : undefined,
     });
+    bumpUsage(response);
 
-    const u = response.usage ?? {};
+    // Tool-call loop: run the agent pipeline when the model asks for it.
+    for (let hop = 0; hop < 3; hop++) {
+      const calls = (response.output ?? []).filter(
+        (o) => o.type === "function_call" && o.name === "find_linkedin_connections"
+      );
+      if (!calls.length) break;
+
+      const toolOutputs = [];
+      for (const call of calls) {
+        let out;
+        try {
+          const args = JSON.parse(call.arguments || "{}");
+          const { result, usage: pu } = await runJobSearch(
+            openai,
+            args.job_description,
+            agent?.config ?? {},
+            activeModel
+          );
+          usage.input_tokens += pu.input_tokens;
+          usage.output_tokens += pu.output_tokens;
+          usage.total_tokens += pu.total_tokens;
+          out = JSON.stringify(result);
+        } catch (e) {
+          out = JSON.stringify({ error: String(e?.message || e) });
+        }
+        toolOutputs.push({
+          type: "function_call_output",
+          call_id: call.call_id,
+          output: out,
+        });
+      }
+
+      response = await openai.responses.create({
+        model: activeModel,
+        previous_response_id: response.id,
+        input: toolOutputs,
+        tools: tools.length ? tools : undefined,
+      });
+      bumpUsage(response);
+    }
+
     res.json({
       reply: response.output_text ?? "",
-      model: model || DEFAULT_MODEL,
-      usage: {
-        input_tokens: u.input_tokens ?? 0,
-        output_tokens: u.output_tokens ?? 0,
-        total_tokens: u.total_tokens ?? 0,
-      },
+      model: activeModel,
+      usage,
     });
   } catch (err) {
     console.error("[/api/chat]", err?.message || err);

@@ -292,6 +292,10 @@ const Chat: React.FC = () => {
           fileSearch: settings.file_search,
           systemPrompt: settings.system_prompt,
           userPromptAddition: settings.user_prompt_addition,
+          agent: {
+            enabled: settings.agent_enabled,
+            config: settings.agent_config ?? {},
+          },
         }),
       });
       if (!res.ok) throw new Error(`chat failed: ${res.status}`);

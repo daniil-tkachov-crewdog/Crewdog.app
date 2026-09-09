@@ -2,8 +2,9 @@ import { useState } from "react";
 import UsersTab from "./admin/UsersTab";
 import ApiTab from "./admin/ApiTab";
 import PromptsTab from "./admin/PromptsTab";
+import AgentTab from "./admin/AgentTab";
 
-const TABS = ["Users", "API", "Prompts", "Settings"] as const;
+const TABS = ["Users", "API", "Prompts", "AI Agent", "Settings"] as const;
 type Tab = (typeof TABS)[number];
 
 const Admin = () => {
@@ -39,6 +40,7 @@ const Admin = () => {
         {active === "Users" && <UsersTab />}
         {active === "API" && <ApiTab />}
         {active === "Prompts" && <PromptsTab />}
+        {active === "AI Agent" && <AgentTab />}
         {/* Settings intentionally empty for now */}
       </main>
     </div>

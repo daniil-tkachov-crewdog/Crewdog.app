@@ -1,12 +1,22 @@
 // Global app configuration set by the admin (API tab).
 import { supabase } from "@/lib/supabase";
 
+export type AgentConfig = {
+  max_contacts?: number;
+  hr_roles?: string;
+  extract_instructions?: string;
+  verify_instructions?: string;
+  search_instructions?: string;
+};
+
 export type AppSettings = {
   chat_model: string;
   web_search: boolean;
   file_search: boolean;
   system_prompt: string;
   user_prompt_addition: string;
+  agent_enabled: boolean;
+  agent_config: AgentConfig;
   updated_at?: string;
 };
 
@@ -16,13 +26,15 @@ const DEFAULTS: AppSettings = {
   file_search: false,
   system_prompt: "",
   user_prompt_addition: "",
+  agent_enabled: false,
+  agent_config: {},
 };
 
 export async function getSettings(): Promise<AppSettings> {
   // Authenticated users can read the full row directly (RLS: authenticated).
   const { data, error } = await supabase
     .from("app_settings")
-    .select("chat_model, web_search, file_search, system_prompt, user_prompt_addition, updated_at")
+    .select("chat_model, web_search, file_search, system_prompt, user_prompt_addition, agent_enabled, agent_config, updated_at")
     .eq("id", "global")
     .maybeSingle();
   if (!error && data) return { ...DEFAULTS, ...data };
