@@ -19,13 +19,26 @@ const DEFAULTS: AppSettings = {
 };
 
 export async function getSettings(): Promise<AppSettings> {
+  // Authenticated users can read the full row directly (RLS: authenticated).
   const { data, error } = await supabase
     .from("app_settings")
     .select("chat_model, web_search, file_search, system_prompt, user_prompt_addition, updated_at")
     .eq("id", "global")
     .maybeSingle();
-  if (error || !data) return DEFAULTS;
-  return { ...DEFAULTS, ...data };
+  if (!error && data) return { ...DEFAULTS, ...data };
+
+  // Logged-out (anon) users are blocked by RLS from the table, so fall back to
+  // the SECURITY DEFINER RPC that exposes the public settings — including the
+  // system prompt — but NOT the hidden user_prompt_addition.
+  try {
+    const { data: pub } = await supabase.rpc("get_public_app_settings");
+    const row = Array.isArray(pub) ? pub[0] : pub;
+    if (row) return { ...DEFAULTS, ...row };
+  } catch {
+    /* fall through to defaults */
+  }
+
+  return DEFAULTS;
 }
 
 // Admin-only (enforced by RLS).
