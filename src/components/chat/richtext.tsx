@@ -5,9 +5,25 @@ import React from "react";
 // nodes (no dangerouslySetInnerHTML). Whitespace/newlines are preserved by the
 // parent's `whitespace-pre-wrap`.
 
-const MD_LINK = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/;
-const URL = /((?:https?:\/\/|www\.)[^\s<]+[^\s<.,;:!?)\]}'"])/;
+// Markdown link with any href (http(s), www, or a bare domain like linkedin.com/in/x).
+const MD_LINK = /\[([^\]]+)\]\(([^)\s]+)\)/;
+// Bare links: full URLs, www.*, or bare domains with a known TLD + optional path.
+const URL =
+  /((?:https?:\/\/|www\.)[^\s<]+|(?:[a-zA-Z0-9-]+\.)+(?:com|org|net|io|co|ai|dev|app|me|uk|us|ca|de|fr|nl|es|it|ie|eu|edu|gov|info|biz)(?:\/[^\s<]*)?)/i;
 const BOLD = /\*\*([^*]+)\*\*/;
+
+// Turn a raw href into an absolute URL (prepend https:// when the scheme is missing).
+function toHref(raw: string): string {
+  if (/^(https?:|mailto:|tel:)/i.test(raw)) return raw;
+  return `https://${raw}`;
+}
+
+// Peel trailing sentence punctuation off a bare URL so it isn't swallowed by the link.
+function peelTrailing(raw: string): { core: string; trailing: string } {
+  const m = raw.match(/[.,;:!?)\]}'"]+$/);
+  const trailing = m ? m[0] : "";
+  return { core: trailing ? raw.slice(0, raw.length - trailing.length) : raw, trailing };
+}
 
 const LINK_CLS =
   "font-medium text-[#E0480F] underline decoration-[#E0480F]/40 underline-offset-2 transition-colors hover:decoration-[#E0480F] dark:text-[#FF5A1F] dark:decoration-[#FF5A1F]/40 dark:hover:decoration-[#FF5A1F] [overflow-wrap:anywhere]";
@@ -33,11 +49,11 @@ function splitByRegex(
 }
 
 export function renderRichText(text: string): React.ReactNode {
-  // 1) markdown links
+  // 1) markdown links (any href)
   let nodes: React.ReactNode[] = splitByRegex(text, MD_LINK, (m, k) => (
     <a
       key={`ml${k}`}
-      href={m[2]}
+      href={toHref(m[2])}
       target="_blank"
       rel="noopener noreferrer"
       className={LINK_CLS}
@@ -46,21 +62,23 @@ export function renderRichText(text: string): React.ReactNode {
     </a>
   ));
 
-  // 2) bare URLs inside the remaining string parts
+  // 2) bare URLs / domains inside the remaining string parts
   nodes = nodes.flatMap((n, idx) =>
     typeof n === "string"
       ? splitByRegex(n, URL, (m, k) => {
-          const href = m[1].startsWith("http") ? m[1] : `https://${m[1]}`;
+          const { core, trailing } = peelTrailing(m[1]);
           return (
-            <a
-              key={`u${idx}-${k}`}
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={LINK_CLS}
-            >
-              {m[1]}
-            </a>
+            <React.Fragment key={`u${idx}-${k}`}>
+              <a
+                href={toHref(core)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={LINK_CLS}
+              >
+                {core}
+              </a>
+              {trailing}
+            </React.Fragment>
           );
         })
       : [n]
