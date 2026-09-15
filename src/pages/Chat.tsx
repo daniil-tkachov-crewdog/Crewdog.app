@@ -131,10 +131,10 @@ const CopyButton: React.FC<{ text: string; align: "start" | "end" }> = ({
 // Shown on an empty chat so a first-time visitor can see what CrewDog does by
 // clicking rather than by reading a pitch.
 const STARTER_PROMPTS = [
-  "Who is the real employer behind this job ad?",
-  "Find the hiring manager for a role I'm applying to",
-  "Write me a LinkedIn message to a hiring manager",
-  "Which companies are hiring for my skills right now?",
+  "Who is the real data centre employer behind this job ad?",
+  "Find the hiring manager for a data centre role I'm applying to",
+  "Write me a LinkedIn message to a data centre hiring manager",
+  "Which data centre companies are hiring for my skills right now?",
 ];
 
 const Chat: React.FC = () => {

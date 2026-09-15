@@ -7,9 +7,7 @@ function Wordmark() {
   return (
     <span className="flex items-baseline gap-[2px] text-[24px] font-bold tracking-[-0.02em] text-white">
       Crew<b className="font-bold text-[#FF5A1F]">Dog</b>
-      <span className="ml-2 font-['IBM_Plex_Mono',monospace] text-[12px] uppercase tracking-[0.18em] text-[#6F6C78]">
-        Radar
-      </span>
+      <span className="ml-[5px]">DC</span>
     </span>
   );
 }

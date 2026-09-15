@@ -70,9 +70,7 @@ export const Footer = () => {
           <div className="md:col-span-5">
             <span className="flex items-baseline gap-[2px] text-[24px] font-bold tracking-[-0.02em]">
               Crew<b className="font-bold text-[#FF5A1F]">Dog</b>
-              <span className="ml-2 font-['IBM_Plex_Mono',monospace] text-[12px] uppercase tracking-[0.18em] text-[#6F6C78]">
-                Radar
-              </span>
+              <span className="ml-[5px]">DC</span>
             </span>
             <p className="mt-4 max-w-[34ch] text-[14px] leading-[1.6] text-[#9A97A3]">
               Read the advert. Find the lead. Competitor advert intelligence for
@@ -133,7 +131,7 @@ export const Footer = () => {
         {/* Bottom bar */}
         <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-white/10 pt-8 md:flex-row md:items-center">
           <p className="font-['IBM_Plex_Mono',monospace] text-[12px] tracking-[0.04em] text-[#6F6C78]">
-            © 2025 CrewDog · Built in Aberdeen
+            © 2025 CrewDog DC · Built in Aberdeen
           </p>
           <div className="flex items-center gap-6 font-['IBM_Plex_Mono',monospace] text-[12px] tracking-[0.04em] text-[#6F6C78]">
             <button

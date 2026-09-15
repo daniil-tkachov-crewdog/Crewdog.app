@@ -8,6 +8,7 @@ export const Wordmark: React.FC<{ className?: string }> = ({ className }) => (
     className={`flex items-baseline gap-[2px] font-grotesk text-[18px] font-bold tracking-[-0.02em] text-[#1A1917] dark:text-[#ECEBE8] ${className ?? ""}`}
   >
     Crew<span className="text-[#E0480F] dark:text-[#FF5A1F]">Dog</span>
+    <span className="ml-[5px]">DC</span>
   </span>
 );
 
