@@ -239,10 +239,188 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// SEO: render the admin-managed metadata into index.html server-side.
+//
+// The app is a client-rendered SPA, so a crawler that does not run JavaScript
+// sees only an empty <div id="root">. Google renders JS eventually; the AI
+// crawlers (GPTBot, ClaudeBot, PerplexityBot, …) do not. Rewriting the head
+// here means every crawler gets the real title, description and structured
+// data in the first response — and the admin can change it without a deploy.
+// ---------------------------------------------------------------------------
+
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY =
+  process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+
+const SEO_TTL_MS = 60_000;
+let seoCache = { value: null, at: 0 };
+
+// get_public_seo() is a SECURITY DEFINER function: the metadata is public by
+// definition, so it is readable without a session.
+async function fetchSeo() {
+  const fresh = Date.now() - seoCache.at < SEO_TTL_MS;
+  if (fresh && seoCache.value) return seoCache.value;
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return seoCache.value;
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_public_seo`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: "{}",
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const seo = await res.json();
+    seoCache = { value: seo && typeof seo === "object" ? seo : {}, at: Date.now() };
+  } catch (err) {
+    console.error("[seo] fetch failed, serving last known values:", err?.message || err);
+    // Keep serving the previous values (or the static fallback) rather than
+    // blanking the head; only back off from retrying on every request.
+    seoCache = { ...seoCache, at: Date.now() };
+  }
+  return seoCache.value;
+}
+
+const escapeAttr = (s) =>
+  String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+// Inline JSON must not be able to close the surrounding <script> tag.
+const jsonLd = (obj) =>
+  JSON.stringify(obj, null, 2).replace(/</g, "\\u003c");
+
+const metaName = (name, content) =>
+  content ? `<meta name="${name}" content="${escapeAttr(content)}" />` : "";
+
+const metaProp = (prop, content) =>
+  content ? `<meta property="${prop}" content="${escapeAttr(content)}" />` : "";
+
+function renderSeoBlock(seo) {
+  const canonical = seo.canonical || "https://crewdog.app/";
+  const image = seo.og_image || "https://crewdog.app/CrewDog-Thumbnail.png";
+  const ogTitle = seo.og_title || seo.title;
+  const ogDescription = seo.og_description || seo.description;
+  const faq = Array.isArray(seo.faq)
+    ? seo.faq.filter((f) => f && f.q && f.a)
+    : [];
+
+  const parts = [
+    seo.title ? `<title>${escapeAttr(seo.title)}</title>` : "",
+    metaName("description", seo.description),
+    metaName("keywords", seo.keywords),
+    metaName("author", "CrewDog"),
+    metaName("robots", "index,follow"),
+    metaName("language", "en"),
+    metaName("distribution", "global"),
+    `<link rel="canonical" href="${escapeAttr(canonical)}" />`,
+
+    metaProp("og:locale", "en_GB"),
+    metaProp("og:site_name", "CrewDog"),
+    metaProp("og:title", ogTitle),
+    metaProp("og:description", ogDescription),
+    metaProp("og:type", "website"),
+    metaProp("og:url", canonical),
+    metaProp("og:image", image),
+    metaProp("og:image:width", "1200"),
+    metaProp("og:image:height", "630"),
+    metaProp("og:image:alt", ogTitle),
+
+    metaName("twitter:card", "summary_large_image"),
+    metaName("twitter:site", "@crewdog"),
+    metaName("twitter:title", seo.twitter_title || ogTitle),
+    metaName("twitter:description", seo.twitter_description || ogDescription),
+    metaName("twitter:image", image),
+    metaName("twitter:image:alt", seo.twitter_title || ogTitle),
+
+    `<script type="application/ld+json">${jsonLd({
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: "CrewDog",
+      url: canonical,
+      logo: image,
+      description: seo.org_description || seo.description || "",
+    })}</script>`,
+
+    `<script type="application/ld+json">${jsonLd({
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      name: "CrewDog",
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web",
+      url: canonical,
+      image,
+      description: seo.app_description || seo.description || "",
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "GBP",
+        description: "Start your first CrewDog search for free.",
+      },
+    })}</script>`,
+
+    faq.length
+      ? `<script type="application/ld+json">${jsonLd({
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: faq.map((f) => ({
+            "@type": "Question",
+            name: f.q,
+            acceptedAnswer: { "@type": "Answer", text: f.a },
+          })),
+        })}</script>`
+      : "",
+  ];
+
+  return parts.filter(Boolean).join("\n    ");
+}
+
 // Serve the built SPA and let client-side routing handle everything else.
 const dist = path.join(__dirname, "dist");
-app.use(express.static(dist));
-app.get("*", (_req, res) => res.sendFile(path.join(dist, "index.html")));
+const indexPath = path.join(dist, "index.html");
+const SEO_BLOCK = /<!-- SEO:START -->[\s\S]*?<!-- SEO:END -->/;
+
+let indexTemplate = null;
+function template() {
+  // Cached after the first read; dist/ is immutable for the life of a deploy.
+  if (indexTemplate === null) indexTemplate = readFileSync(indexPath, "utf8");
+  return indexTemplate;
+}
+
+// index: false so that "/" falls through to the handler below and gets the
+// rendered head rather than the raw file.
+app.use(express.static(dist, { index: false }));
+
+app.get("*", async (_req, res) => {
+  let html;
+  try {
+    html = template();
+  } catch (err) {
+    console.error("[seo] could not read index.html:", err?.message || err);
+    return res.status(500).send("Server error");
+  }
+
+  try {
+    const seo = await fetchSeo();
+    // Anything falsy, or a head without the markers, keeps the static fallback.
+    if (seo && Object.keys(seo).length && SEO_BLOCK.test(html)) {
+      html = html.replace(
+        SEO_BLOCK,
+        `<!-- SEO:START -->\n    ${renderSeoBlock(seo)}\n    <!-- SEO:END -->`
+      );
+    }
+  } catch (err) {
+    console.error("[seo] render failed, serving static head:", err?.message || err);
+  }
+
+  res.type("html").send(html);
+});
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log(`Server listening on ${port}`));

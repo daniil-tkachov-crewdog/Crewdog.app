@@ -3,8 +3,9 @@ import UsersTab from "./admin/UsersTab";
 import ApiTab from "./admin/ApiTab";
 import PromptsTab from "./admin/PromptsTab";
 import AgentTab from "./admin/AgentTab";
+import SeoTab from "./admin/SeoTab";
 
-const TABS = ["Users", "API", "Prompts", "AI Agent", "Settings"] as const;
+const TABS = ["Users", "API", "Prompts", "AI Agent", "SEO"] as const;
 type Tab = (typeof TABS)[number];
 
 const Admin = () => {
@@ -41,7 +42,7 @@ const Admin = () => {
         {active === "API" && <ApiTab />}
         {active === "Prompts" && <PromptsTab />}
         {active === "AI Agent" && <AgentTab />}
-        {/* Settings intentionally empty for now */}
+        {active === "SEO" && <SeoTab />}
       </main>
     </div>
   );

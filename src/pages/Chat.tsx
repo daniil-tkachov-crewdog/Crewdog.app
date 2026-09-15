@@ -128,6 +128,15 @@ const CopyButton: React.FC<{ text: string; align: "start" | "end" }> = ({
   );
 };
 
+// Shown on an empty chat so a first-time visitor can see what CrewDog does by
+// clicking rather than by reading a pitch.
+const STARTER_PROMPTS = [
+  "Who is the real employer behind this job ad?",
+  "Find the hiring manager for a role I'm applying to",
+  "Write me a LinkedIn message to a hiring manager",
+  "Which companies are hiring for my skills right now?",
+];
+
 const Chat: React.FC = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
@@ -244,8 +253,9 @@ const Chat: React.FC = () => {
     }
   };
 
-  const send = async () => {
-    const text = input.trim();
+  // `preset` lets the starter prompts send without waiting for a state update.
+  const send = async (preset?: string) => {
+    const text = (preset ?? input).trim();
     const attached = cv;
     if ((!text && !attached) || thinking) return;
     setInput("");
@@ -555,8 +565,27 @@ const Chat: React.FC = () => {
                 <h1 className="text-[32px] font-semibold tracking-[-0.03em]">
                   How can I help you today?
                 </h1>
+                <p className="mt-3 max-w-[520px] text-[14.5px] leading-[1.6] text-[#6E6B64] dark:text-[#96938C]">
+                  Paste a job description and CrewDog finds the real employer
+                  behind it, plus the people worth contacting direct — or just
+                  ask below.
+                </p>
+
+                <div className="mt-7 grid w-full max-w-[560px] grid-cols-1 gap-2 sm:grid-cols-2">
+                  {STARTER_PROMPTS.map((prompt) => (
+                    <button
+                      key={prompt}
+                      onClick={() => send(prompt)}
+                      disabled={thinking}
+                      className="rounded-[14px] border border-[rgba(26,25,23,0.14)] bg-white px-4 py-3 text-left text-[13.5px] leading-[1.45] text-[#1A1917] transition hover:border-[rgba(26,25,23,0.26)] hover:bg-[#FAFAF8] disabled:pointer-events-none disabled:opacity-50 dark:border-[rgba(255,255,255,0.12)] dark:bg-[#1F1E24] dark:text-[#ECEBE8] dark:hover:border-[rgba(255,255,255,0.24)] dark:hover:bg-[#26252B]"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+
                 {!isAuthed && (
-                  <p className="mt-3 text-[14.5px] leading-[1.6] text-[#6E6B64] dark:text-[#96938C]">
+                  <p className="mt-6 text-[14.5px] leading-[1.6] text-[#6E6B64] dark:text-[#96938C]">
                     You can chat without an account.{" "}
                     <Link to="/login" className="underline">
                       Log in
@@ -636,7 +665,7 @@ const Chat: React.FC = () => {
               className="max-h-[150px] min-h-[30px] flex-1 resize-none bg-transparent py-[5px] text-[15px] leading-[1.55] text-[#1A1917] outline-none placeholder:text-[#6E6B64] dark:text-[#ECEBE8] dark:placeholder:text-[#96938C]"
             />
             <button
-              onClick={send}
+              onClick={() => send()}
               disabled={!canSend}
               aria-label="Send message"
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#1A1917] text-[15px] text-white transition-[transform,background] duration-200 hover:-translate-y-[2px] hover:bg-[#E0480F] disabled:pointer-events-none disabled:opacity-40 dark:bg-[#ECEBE8] dark:text-[#17161A] dark:hover:bg-[#FF5A1F] dark:hover:text-white"

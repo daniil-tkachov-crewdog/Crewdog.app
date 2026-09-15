@@ -1,14 +1,80 @@
+# CrewDog — https://crewdog.app/
+# Search engines and AI answer engines are welcome on the public pages.
+# Account, admin and checkout routes are private and have nothing to index.
+
 User-agent: Googlebot
 Allow: /
 
 User-agent: Bingbot
 Allow: /
 
+# AI answer engines. These are named explicitly because several of them ignore
+# wildcard rules and skip sites that do not mention them.
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Perplexity-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
+User-agent: Amazonbot
+Allow: /
+
+User-agent: meta-externalagent
+Allow: /
+
+# Link preview crawlers.
 User-agent: Twitterbot
 Allow: /
 
 User-agent: facebookexternalhit
 Allow: /
 
+User-agent: LinkedInBot
+Allow: /
+
+User-agent: Slackbot
+Allow: /
+
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /account
+Disallow: /settings
+Disallow: /login
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /verify
+Disallow: /success
+Disallow: /cancel
+
+Sitemap: https://crewdog.app/sitemap.xml

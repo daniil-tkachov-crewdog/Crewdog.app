@@ -5,11 +5,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <title>
-      CrewDog|Apply Direct Before The Job Is Advertised
-    </title>
-
-    <!-- Fonts: Landing page (Space Grotesk + IBM Plex Mono) -->
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -25,13 +21,17 @@
       href="/favicon-32x32.png"
     />
 
-    <!-- Canonical -->
-    <link rel="canonical" href="https://crewdog.app/" />
-
-    <!-- SEO Meta -->
+    <!--
+      Everything between SEO:START and SEO:END is replaced by server.js on every
+      request with the values saved in the admin SEO tab. What follows is the
+      fallback used in local dev and if the database is unreachable — edit the
+      live copy in /admin, not here.
+    -->
+    <!-- SEO:START -->
+    <title>CrewDog | Apply Direct Before The Job Is Advertised</title>
     <meta
       name="description"
-      content="CrewDog analyzes LinkedIn job descriptions to find the real employe r and key contacts so you can skip agency recruiters, apply direct to decision-makers, and discover jobs before they are publicly advertised."
+      content="CrewDog analyses LinkedIn job descriptions to find the real employer and key contacts so you can skip agency recruiters, apply direct to decision-makers, and discover jobs before they are publicly advertised."
     />
     <meta
       name="keywords"
@@ -41,13 +41,14 @@
     <meta name="robots" content="index,follow" />
     <meta name="language" content="en" />
     <meta name="distribution" content="global" />
+    <link rel="canonical" href="https://crewdog.app/" />
 
     <!-- Open Graph -->
     <meta property="og:locale" content="en_GB" />
     <meta property="og:site_name" content="CrewDog" />
     <meta
       property="og:title"
-      content="CrewDog – The LinkedIn Job Recommendation Engine"
+      content="CrewDog - The LinkedIn Job Recommendation Engine"
     />
     <meta
       property="og:description"
@@ -55,12 +56,12 @@
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://crewdog.app/" />
-    <meta property="og:image" content="/CrewDog-Thumbnail.png" />
+    <meta property="og:image" content="https://crewdog.app/CrewDog-Thumbnail.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta
       property="og:image:alt"
-      content="CrewDog – LinkedIn Job Recommendation Engine"
+      content="CrewDog - LinkedIn Job Recommendation Engine"
     />
 
     <!-- Twitter -->
@@ -68,13 +69,13 @@
     <meta name="twitter:site" content="@crewdog" />
     <meta
       name="twitter:title"
-      content="CrewDog – Find the Real Employer Behind LinkedIn Jobs"
+      content="CrewDog - Find the Real Employer Behind LinkedIn Jobs"
     />
     <meta
       name="twitter:description"
       content="Identify the true hiring company and key LinkedIn contacts behind recruiter job posts. Start a free CrewDog search and apply direct to decision-makers."
     />
-    <meta name="twitter:image" content="/CrewDog-Thumbnail.png" />
+    <meta name="twitter:image" content="https://crewdog.app/CrewDog-Thumbnail.png" />
     <meta name="twitter:image:alt" content="CrewDog product thumbnail" />
 
     <!-- Structured Data: Organization -->
@@ -85,10 +86,6 @@
         "name": "CrewDog",
         "url": "https://crewdog.app/",
         "logo": "https://crewdog.app/CrewDog-Thumbnail.png",
-        "sameAs": [
-          "https://www.linkedin.com",
-          "https://twitter.com/crewdog"
-        ],
         "description": "CrewDog is a LinkedIn job recommendation engine that finds the real employer and key contacts behind job descriptions so candidates can bypass recruiters and apply direct."
       }
     </script>
@@ -103,7 +100,7 @@
         "operatingSystem": "Web",
         "url": "https://crewdog.app/",
         "image": "https://crewdog.app/CrewDog-Thumbnail.png",
-        "description": "CrewDog analyzes LinkedIn job descriptions, identifies the actual hiring company, and surfaces key LinkedIn contacts so job seekers can apply direct to decision-makers instead of recruiters.",
+        "description": "CrewDog analyses LinkedIn job descriptions, identifies the actual hiring company, and surfaces key LinkedIn contacts so job seekers can apply direct to decision-makers instead of recruiters.",
         "offers": {
           "@type": "Offer",
           "price": "0",
@@ -124,7 +121,7 @@
             "name": "What is CrewDog?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "CrewDog is a LinkedIn job recommendation engine that analyzes job descriptions, finds the real hiring company, and surfaces key LinkedIn contacts so you can apply direct to decision-makers instead of going through recruiters."
+              "text": "CrewDog is a LinkedIn job recommendation engine that analyses job descriptions, finds the real hiring company, and surfaces key LinkedIn contacts so you can apply direct to decision-makers instead of going through recruiters."
             }
           },
           {
@@ -140,7 +137,7 @@
             "name": "Does CrewDog work with LinkedIn job links?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Yes. You can paste any LinkedIn job description into CrewDog and our AI will analyze it to uncover the real employer, company website, and key LinkedIn profiles to contact."
+              "text": "Yes. You can paste any LinkedIn job description into CrewDog and our AI will analyse it to uncover the real employer, company website, and key LinkedIn profiles to contact."
             }
           },
           {
@@ -154,9 +151,10 @@
         ]
       }
     </script>
+    <!-- SEO:END -->
 
   <script src="https://crewdog-alex.onrender.com/widget.js" data-client-id="client_5bc164cfc51a42319569b58d149385b0"></script>
-    
+
   </head>
 
   <body>

@@ -9,6 +9,25 @@ export type AgentConfig = {
   search_instructions?: string;
 };
 
+// Public-site metadata, edited in the admin SEO tab. The server renders these
+// into index.html on every request so crawlers see them without running JS.
+export type SeoFaqItem = { q: string; a: string };
+
+export type SeoSettings = {
+  title?: string;
+  description?: string;
+  keywords?: string;
+  canonical?: string;
+  og_title?: string;
+  og_description?: string;
+  og_image?: string;
+  twitter_title?: string;
+  twitter_description?: string;
+  org_description?: string;
+  app_description?: string;
+  faq?: SeoFaqItem[];
+};
+
 export type AppSettings = {
   chat_model: string;
   web_search: boolean;
@@ -17,6 +36,7 @@ export type AppSettings = {
   user_prompt_addition: string;
   agent_enabled: boolean;
   agent_config: AgentConfig;
+  seo: SeoSettings;
   updated_at?: string;
 };
 
@@ -28,13 +48,14 @@ const DEFAULTS: AppSettings = {
   user_prompt_addition: "",
   agent_enabled: false,
   agent_config: {},
+  seo: {},
 };
 
 export async function getSettings(): Promise<AppSettings> {
   // Authenticated users can read the full row directly (RLS: authenticated).
   const { data, error } = await supabase
     .from("app_settings")
-    .select("chat_model, web_search, file_search, system_prompt, user_prompt_addition, agent_enabled, agent_config, updated_at")
+    .select("chat_model, web_search, file_search, system_prompt, user_prompt_addition, agent_enabled, agent_config, seo, updated_at")
     .eq("id", "global")
     .maybeSingle();
   if (!error && data) return { ...DEFAULTS, ...data };
