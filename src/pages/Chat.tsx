@@ -566,9 +566,9 @@ const Chat: React.FC = () => {
                   How can I help you today?
                 </h1>
                 <p className="mt-3 max-w-[520px] text-[14.5px] leading-[1.6] text-[#6E6B64] dark:text-[#96938C]">
-                  Paste a job description and CrewDog finds the real employer
-                  behind it, plus the people worth contacting direct — or just
-                  ask below.
+                  Paste a data centre job description and CrewDog DC finds the
+                  real employer behind it, plus the people worth contacting
+                  direct on LinkedIn — or just ask below.
                 </p>
 
                 <div className="mt-7 grid w-full max-w-[560px] grid-cols-1 gap-2 sm:grid-cols-2">
@@ -660,7 +660,7 @@ const Chat: React.FC = () => {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKeyDown}
-              placeholder="Message Crewdog…"
+              placeholder="Message CrewDog DC…"
               rows={1}
               className="max-h-[150px] min-h-[30px] flex-1 resize-none bg-transparent py-[5px] text-[15px] leading-[1.55] text-[#1A1917] outline-none placeholder:text-[#6E6B64] dark:text-[#ECEBE8] dark:placeholder:text-[#96938C]"
             />

@@ -73,8 +73,9 @@ export const Footer = () => {
               <span className="ml-[5px]">DC</span>
             </span>
             <p className="mt-4 max-w-[34ch] text-[14px] leading-[1.6] text-[#9A97A3]">
-              Read the advert. Find the lead. Competitor advert intelligence for
-              energy &amp; data-centre recruiters.
+              Find the real employer behind the advert, and the people worth
+              contacting direct. Job search intelligence for data centre
+              professionals.
             </p>
 
             {/* Socials */}
