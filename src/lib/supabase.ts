@@ -13,6 +13,12 @@ export const supabase = createClient(
   }
 );
 
+// The server needs this to identify the caller on /api/chat (usage limits).
+export async function getAccessToken(): Promise<string | null> {
+  const { data: { session } = {} } = await supabase.auth.getSession();
+  return session?.access_token ?? null;
+}
+
 export async function getIdentity() {
   const { data: { session } = {} } = await supabase.auth.getSession();
   const user = session?.user || null;

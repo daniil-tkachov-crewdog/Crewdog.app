@@ -8,7 +8,8 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/lib/supabase";
-import { getSettings, saveSettings } from "@/services/settings";
+import { getSettings, saveSettings, type UsageLimits } from "@/services/settings";
+import { DEFAULT_LIMITS } from "@/services/usage";
 import {
   Area,
   AreaChart,
@@ -56,6 +57,7 @@ const ApiTab = () => {
   const [saving, setSaving] = useState<string | null>(null);
   const [usage, setUsage] = useState<UsagePoint[]>([]);
   const [range, setRange] = useState<RangeKey>("24h");
+  const [limits, setLimits] = useState<UsageLimits>({});
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Initial load: settings + model list.
@@ -65,6 +67,7 @@ const ApiTab = () => {
       setModel(s.chat_model);
       setWebSearch(s.web_search);
       setFileSearch(s.file_search);
+      setLimits(s.usage_limits ?? {});
 
       try {
         const r = await fetch("/api/models");
@@ -103,6 +106,31 @@ const ApiTab = () => {
   };
 
   const totalTokens = usage.reduce((a, b) => a + (b.total_tokens ?? 0), 0);
+
+  // 1M units = $1.25 of GPT-5 spend (units are input-equivalent; see usage.js).
+  const USD_PER_MILLION_UNITS = 1.25;
+  const GBP_PER_USD = 1 / 1.27;
+  const costOf = (units: number) =>
+    ((units / 1_000_000) * USD_PER_MILLION_UNITS * GBP_PER_USD).toFixed(2);
+
+  const capValue = (tier: "pro" | "free", field: "five_hour" | "week") =>
+    limits[tier]?.[field] ??
+    DEFAULT_LIMITS[tier][field === "five_hour" ? "5h" : "week"];
+
+  const setCap = (
+    tier: "pro" | "free",
+    field: "five_hour" | "week",
+    raw: string
+  ) => {
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0) return;
+    const next: UsageLimits = {
+      ...limits,
+      [tier]: { ...(limits[tier] ?? {}), [field]: Math.round(n) },
+    };
+    setLimits(next);
+    persist({ usage_limits: next }, "limits");
+  };
 
   return (
     <div className="max-w-3xl space-y-8">
@@ -153,6 +181,51 @@ const ApiTab = () => {
               persist({ file_search: v }, "file");
             }}
           />
+        </div>
+      </section>
+
+      {/* AI usage limits */}
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-sm font-medium">
+            AI usage limits{saving === "limits" ? " · Saving…" : ""}
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Rolling windows, per user, in input-equivalent units
+            (input + 8 × output). 1,000,000 units ≈ $1.25 of GPT-5 spend.
+            Admins are exempt.
+          </p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          {(["pro", "free"] as const).map((tier) => (
+            <div key={tier} className="space-y-3 rounded-xl border p-4">
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm font-medium capitalize">{tier}</span>
+                <span className="text-xs text-muted-foreground">
+                  max £{costOf(capValue(tier, "week"))}/week
+                </span>
+              </div>
+              {(
+                [
+                  ["five_hour", "Per 5 hours"],
+                  ["week", "Per week"],
+                ] as const
+              ).map(([field, label]) => (
+                <label key={field} className="block space-y-1">
+                  <span className="text-xs text-muted-foreground">{label}</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={10000}
+                    defaultValue={capValue(tier, field)}
+                    onBlur={(e) => setCap(tier, field, e.target.value)}
+                    className="w-full rounded-md border bg-background px-3 py-1.5 text-sm"
+                  />
+                </label>
+              ))}
+            </div>
+          ))}
         </div>
       </section>
 

@@ -15,6 +15,9 @@ import {
   deleteChat,
 } from "@/services/chat";
 import { getSettings, logTokenUsage } from "@/services/settings";
+import { getAccessToken } from "@/lib/supabase";
+import UsageMeter from "@/components/chat/UsageMeter";
+import { formatReset } from "@/services/usage";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -158,6 +161,14 @@ const Chat: React.FC = () => {
   const [cv, setCv] = React.useState<AttachedCv | null>(null);
   const [cvModalOpen, setCvModalOpen] = React.useState(false);
   const [cvLoading, setCvLoading] = React.useState(false);
+  // Set when the server refuses a turn because a usage window is exhausted.
+  const [limitHit, setLimitHit] = React.useState<{
+    window: "5h" | "week";
+    resetsAt: string;
+    plan: string;
+  } | null>(null);
+  // Bumped after every reply so the usage meter re-reads its counters.
+  const [usageKey, setUsageKey] = React.useState(0);
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -290,11 +301,17 @@ const Chat: React.FC = () => {
       void persistUserMessage(convId, displayContent, isFirst);
 
     setThinking(true);
+    setLimitHit(null);
     try {
       const settings = await getSettings();
+      const token = await getAccessToken();
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          // The server meters usage per user, so every turn is authenticated.
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           messages: outgoing,
           model: settings.chat_model,
@@ -308,6 +325,21 @@ const Chat: React.FC = () => {
           },
         }),
       });
+      if (res.status === 401) {
+        toast.error("Log in to chat with Crewdog.");
+        navigate("/login");
+        return;
+      }
+      if (res.status === 429) {
+        const body = await res.json().catch(() => ({}));
+        setLimitHit({
+          window: body?.window === "week" ? "week" : "5h",
+          resetsAt: String(body?.resets_at ?? ""),
+          plan: String(body?.plan ?? "free"),
+        });
+        setUsageKey((k) => k + 1);
+        return;
+      }
       if (!res.ok) throw new Error(`chat failed: ${res.status}`);
       const data = await res.json();
       const reply = String(data?.reply ?? "").trim() || "(no response)";
@@ -320,6 +352,7 @@ const Chat: React.FC = () => {
         messages: [...c.messages, botMsg],
       }));
       if (isAuthed && user) void persistAssistantMessage(convId, reply);
+      setUsageKey((k) => k + 1);
     } catch (e) {
       console.error(e);
       toast.error("Couldn't reach the assistant. Try again.");
@@ -544,7 +577,8 @@ const Chat: React.FC = () => {
           <span className="truncate text-[14px] font-medium">
             {active.messages.length === 0 ? "New chat" : active.title}
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {isAuthed && <UsageMeter refreshKey={usageKey} />}
             <ThemeToggle />
             {!isAuthed && (
               <Link
@@ -630,6 +664,22 @@ const Chat: React.FC = () => {
         </div>
 
         <div className="px-6 pb-5">
+          {limitHit && (
+            <div className="mx-auto mb-2 w-full max-w-[720px] rounded-[12px] border border-[rgba(224,72,15,0.35)] bg-[rgba(224,72,15,0.07)] px-4 py-3 text-[13.5px] leading-[1.55] text-[#1A1917] dark:border-[rgba(255,90,31,0.35)] dark:bg-[rgba(255,90,31,0.08)] dark:text-[#ECEBE8]">
+              You've hit your{" "}
+              {limitHit.window === "week" ? "weekly limit" : "5-hour limit"}.
+              {limitHit.resetsAt && <> Resets at {formatReset(limitHit.resetsAt)}.</>}
+              {limitHit.plan !== "pro" && (
+                <>
+                  {" "}
+                  <Link to="/pricing" className="underline">
+                    Upgrade to Pro
+                  </Link>{" "}
+                  for a much larger allowance.
+                </>
+              )}
+            </div>
+          )}
           {cv && (
             <div className="mx-auto mb-2 flex w-full max-w-[720px]">
               <span className="inline-flex items-center gap-2 rounded-[10px] border border-[rgba(26,25,23,0.14)] bg-[#F7F7F5] py-1.5 pl-3 pr-2 text-[13px] text-[#1A1917] dark:border-[rgba(255,255,255,0.12)] dark:bg-[#141317] dark:text-[#ECEBE8]">

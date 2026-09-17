@@ -28,6 +28,13 @@ export type SeoSettings = {
   faq?: SeoFaqItem[];
 };
 
+// Per-plan AI allowances, in input-equivalent units (see usage.js).
+// Omitted keys fall back to the defaults compiled into the server.
+export type UsageLimits = {
+  pro?: { five_hour?: number; week?: number };
+  free?: { five_hour?: number; week?: number };
+};
+
 export type AppSettings = {
   chat_model: string;
   web_search: boolean;
@@ -37,6 +44,7 @@ export type AppSettings = {
   agent_enabled: boolean;
   agent_config: AgentConfig;
   seo: SeoSettings;
+  usage_limits: UsageLimits;
   updated_at?: string;
 };
 
@@ -49,13 +57,14 @@ const DEFAULTS: AppSettings = {
   agent_enabled: false,
   agent_config: {},
   seo: {},
+  usage_limits: {},
 };
 
 export async function getSettings(): Promise<AppSettings> {
   // Authenticated users can read the full row directly (RLS: authenticated).
   const { data, error } = await supabase
     .from("app_settings")
-    .select("chat_model, web_search, file_search, system_prompt, user_prompt_addition, agent_enabled, agent_config, seo, updated_at")
+    .select("chat_model, web_search, file_search, system_prompt, user_prompt_addition, agent_enabled, agent_config, seo, usage_limits, updated_at")
     .eq("id", "global")
     .maybeSingle();
   if (!error && data) return { ...DEFAULTS, ...data };

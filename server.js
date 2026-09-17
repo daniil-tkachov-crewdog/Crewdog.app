@@ -7,11 +7,20 @@ import { fileURLToPath } from "node:url";
 import OpenAI from "openai";
 import { PDFParse } from "pdf-parse";
 import { runJobSearch } from "./agent.js";
+import {
+  attachUser,
+  isAdminUser,
+  planForUser,
+  checkLimit,
+  recordUsage,
+} from "./usage.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 // Raised from 1mb to accommodate base64-encoded CV uploads.
 app.use(express.json({ limit: "15mb" }));
+// Populates req.userId from the Supabase bearer token when one is present.
+app.use("/api", attachUser);
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-4o";
@@ -113,6 +122,33 @@ app.post("/api/chat", async (req, res) => {
       return res.status(400).json({ error: "messages[] is required" });
     }
 
+    // Chat costs money per call, so it needs an identity to meter against.
+    if (!req.userId) {
+      return res
+        .status(401)
+        .json({ error: "Log in to chat with Crewdog.", code: "auth_required" });
+    }
+
+    // Admins are exempt; everyone else gets a 5-hour and a weekly allowance.
+    const admin = isAdminUser(req.authUser);
+    const plan = admin ? "pro" : await planForUser(req.userId);
+    if (!admin) {
+      const limit = await checkLimit(req.userId, plan);
+      if (limit && limit.allowed === false) {
+        return res.status(429).json({
+          error:
+            limit.exceeded === "week"
+              ? "You've used your weekly limit."
+              : "You've used your 5-hour limit.",
+          code: "limit_reached",
+          window: limit.exceeded,
+          plan,
+          resets_at: limit.resets_at,
+          usage: limit,
+        });
+      }
+    }
+
     const activeModel = model || DEFAULT_MODEL;
     const agentEnabled = !!agent?.enabled;
 
@@ -171,12 +207,20 @@ app.post("/api/chat", async (req, res) => {
       }
     }
 
-    const usage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
+    const usage = {
+      input_tokens: 0,
+      output_tokens: 0,
+      total_tokens: 0,
+      cached_tokens: 0,
+    };
     const bumpUsage = (r) => {
       const u = r?.usage ?? {};
       usage.input_tokens += u.input_tokens ?? 0;
       usage.output_tokens += u.output_tokens ?? 0;
       usage.total_tokens += u.total_tokens ?? 0;
+      // Cached input bills at 10% of the input rate; it is already included in
+      // input_tokens, so it is tracked separately and discounted in toUnits().
+      usage.cached_tokens += u.input_tokens_details?.cached_tokens ?? 0;
     };
 
     let response = await openai.responses.create({
@@ -228,10 +272,15 @@ app.post("/api/chat", async (req, res) => {
       bumpUsage(response);
     }
 
+    // Commit what this turn actually cost — chat hops and the job-search
+    // pipeline alike, since `usage` accumulates both.
+    const committed = admin ? null : await recordUsage(req.userId, plan, usage);
+
     res.json({
       reply: response.output_text ?? "",
       model: activeModel,
       usage,
+      limits: committed ?? undefined,
     });
   } catch (err) {
     console.error("[/api/chat]", err?.message || err);
