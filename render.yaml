@@ -17,10 +17,6 @@ services:
         sync: false
       - key: VITE_SUPABASE_ANON_KEY
         sync: false
-      # Server-only: used to call the consume_ai_units RPC that enforces the
-      # per-user AI usage limits. Never exposed to the browser.
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
       - key: VITE_STRIPE_PUBLISHABLE_KEY
         sync: false
       - key: VITE_GTM_ID

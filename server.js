@@ -133,7 +133,7 @@ app.post("/api/chat", async (req, res) => {
     const admin = isAdminUser(req.authUser);
     const plan = admin ? "pro" : await planForUser(req.userId);
     if (!admin) {
-      const limit = await checkLimit(req.userId, plan);
+      const limit = await checkLimit(req.accessToken, plan);
       if (limit && limit.allowed === false) {
         return res.status(429).json({
           error:
@@ -274,7 +274,9 @@ app.post("/api/chat", async (req, res) => {
 
     // Commit what this turn actually cost — chat hops and the job-search
     // pipeline alike, since `usage` accumulates both.
-    const committed = admin ? null : await recordUsage(req.userId, plan, usage);
+    const committed = admin
+      ? null
+      : await recordUsage(req.accessToken, plan, usage);
 
     res.json({
       reply: response.output_text ?? "",

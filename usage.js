@@ -17,8 +17,6 @@
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY =
   process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-const SUPABASE_SERVICE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
 const ACCOUNT_API_BASE = (process.env.VITE_API_BASE || "").replace(/\/$/, "");
 
 // Price ratio between output and input tokens for the active model. GPT-5 is
@@ -85,14 +83,17 @@ export async function verifyAccessToken(token) {
   }
 }
 
-// Express middleware: populates req.authUser / req.userId when a valid bearer
-// token is present. It never rejects — routes decide whether auth is required.
+// Express middleware: populates req.authUser / req.userId / req.accessToken when
+// a valid bearer token is present. It never rejects — routes decide whether auth
+// is required. The token is kept because every metering call is made *as* the
+// user, which is what removes the need for a service-role key.
 export async function attachUser(req, _res, next) {
   const header = req.get?.("authorization") || req.headers?.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
   const user = await verifyAccessToken(token);
   req.authUser = user;
   req.userId = user?.id ?? null;
+  req.accessToken = user ? token : null;
   next();
 }
 
@@ -135,21 +136,23 @@ export async function planForUser(userId) {
 }
 
 // Admin-configured overrides (app_settings.usage_limits), merged over the
-// defaults above. Cached for 60s like the SEO block in server.js.
-export async function limitsForPlan(plan) {
+// defaults above. Read as the signed-in user — the existing RLS on app_settings
+// already lets any authenticated user read the row. Cached for 60s like the SEO
+// block in server.js.
+export async function limitsForPlan(plan, token) {
   const base = DEFAULT_LIMITS[plan] ?? DEFAULT_LIMITS.free;
   const cached = cacheGet("limits");
   if (cached !== undefined) return { ...base, ...(cached?.[plan] ?? {}) };
 
   let configured = {};
-  if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+  if (SUPABASE_URL && SUPABASE_ANON_KEY && token) {
     try {
       const res = await fetch(
         `${SUPABASE_URL}/rest/v1/app_settings?id=eq.global&select=usage_limits`,
         {
           headers: {
             apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_SERVICE_KEY || SUPABASE_ANON_KEY}`,
+            Authorization: `Bearer ${token}`,
           },
         }
       );
@@ -169,23 +172,24 @@ export async function limitsForPlan(plan) {
 
 // Calls the consume_ai_units RPC, which rolls expired windows, checks both caps
 // and increments atomically. p_units = 0 is a pure pre-flight check.
-async function callConsume(userId, units, limits) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-    // Without a service key there is no trustworthy way to meter; say so loudly
-    // rather than silently letting every request through.
-    console.error("[usage] SUPABASE_SERVICE_ROLE_KEY is not set — limits are off");
+//
+// The call is made as the signed-in user: the function is SECURITY DEFINER and
+// takes its subject from auth.uid(), so the anon key the server already holds is
+// enough and no service-role secret is needed.
+async function callConsume(token, units, limits) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    console.error("[usage] Supabase URL/anon key missing — limits are off");
     return null;
   }
 
   const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/consume_ai_units`, {
     method: "POST",
     headers: {
-      apikey: SUPABASE_SERVICE_KEY,
-      Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      p_user: userId,
       p_units: units,
       p_cap_5h: limits.five_hour,
       p_cap_week: limits.week,
@@ -199,10 +203,10 @@ async function callConsume(userId, units, limits) {
  * Pre-flight. Returns { allowed, ... } — `allowed: false` means one of the two
  * windows is already exhausted and the request must not reach OpenAI.
  */
-export async function checkLimit(userId, plan) {
-  const limits = await limitsForPlan(plan);
+export async function checkLimit(token, plan) {
+  const limits = await limitsForPlan(plan, token);
   try {
-    const result = await callConsume(userId, 0, limits);
+    const result = await callConsume(token, 0, limits);
     if (!result) return { allowed: true, unmetered: true };
     return { ...result, limits };
   } catch (err) {
@@ -213,12 +217,12 @@ export async function checkLimit(userId, plan) {
 }
 
 /** Post-flight. Commits what the request actually cost. Never throws. */
-export async function recordUsage(userId, plan, usage) {
+export async function recordUsage(token, plan, usage) {
   const units = toUnits(usage);
   if (units <= 0) return null;
   try {
-    const limits = await limitsForPlan(plan);
-    return await callConsume(userId, units, limits);
+    const limits = await limitsForPlan(plan, token);
+    return await callConsume(token, units, limits);
   } catch (err) {
     console.error("[usage] could not record usage:", err?.message || err);
     return null;
