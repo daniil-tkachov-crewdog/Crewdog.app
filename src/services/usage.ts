@@ -56,7 +56,23 @@ export async function fetchUsage(
 export const percentUsed = (w: UsageWindow) =>
   w.cap > 0 ? Math.min(100, Math.round((w.used / w.cap) * 100)) : 0;
 
-// "resets at 14:30" / "resets Fri 14:30" depending on how far out it is.
+// "4 hr 36 min" / "12 min" / "2 days 3 hr" — the time left on a window.
+export function formatCountdown(iso: string): string {
+  const ms = new Date(iso).getTime() - Date.now();
+  if (Number.isNaN(ms) || ms <= 0) return "now";
+
+  const minutes = Math.floor(ms / 60_000);
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  const mins = minutes % 60;
+
+  if (days > 0) return `${days} day${days > 1 ? "s" : ""}${hours ? ` ${hours} hr` : ""}`;
+  if (hours > 0) return `${hours} hr${mins ? ` ${mins} min` : ""}`;
+  return `${Math.max(1, mins)} min`;
+}
+
+// "14:30" / "Fri 14:30" — an absolute reset time, for when a countdown would
+// be less useful than a clock time.
 export function formatReset(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
@@ -69,3 +85,11 @@ export function formatReset(iso: string): string {
         minute: "2-digit",
       });
 }
+
+// Units are an internal accounting detail; the breakdown shows them compactly.
+export const formatUnits = (n: number) =>
+  n >= 1_000_000
+    ? `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`
+    : n >= 1_000
+    ? `${Math.round(n / 1_000)}k`
+    : String(n);

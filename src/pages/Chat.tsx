@@ -17,7 +17,7 @@ import {
 import { getSettings, logTokenUsage } from "@/services/settings";
 import { getAccessToken } from "@/lib/supabase";
 import UsageMeter from "@/components/chat/UsageMeter";
-import { formatReset } from "@/services/usage";
+import { formatCountdown } from "@/services/usage";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -668,7 +668,9 @@ const Chat: React.FC = () => {
             <div className="mx-auto mb-2 w-full max-w-[720px] rounded-[12px] border border-[rgba(224,72,15,0.35)] bg-[rgba(224,72,15,0.07)] px-4 py-3 text-[13.5px] leading-[1.55] text-[#1A1917] dark:border-[rgba(255,90,31,0.35)] dark:bg-[rgba(255,90,31,0.08)] dark:text-[#ECEBE8]">
               You've hit your{" "}
               {limitHit.window === "week" ? "weekly limit" : "5-hour limit"}.
-              {limitHit.resetsAt && <> Resets at {formatReset(limitHit.resetsAt)}.</>}
+              {limitHit.resetsAt && (
+                <> Resets in {formatCountdown(limitHit.resetsAt)}.</>
+              )}
               {limitHit.plan !== "pro" && (
                 <>
                   {" "}
