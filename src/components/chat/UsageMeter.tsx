@@ -77,7 +77,6 @@ const UsageMeter: React.FC<Props> = ({ refreshKey = 0 }) => {
   const [detailed, setDetailed] = React.useState(false);
   const [snapshot, setSnapshot] = React.useState<UsageSnapshot | null>(null);
   const [pro, setPro] = React.useState(false);
-  const [admin, setAdmin] = React.useState(false);
 
   useMinuteTick(open);
 
@@ -88,11 +87,11 @@ const UsageMeter: React.FC<Props> = ({ refreshKey = 0 }) => {
         fetchAccountSummary(),
         getSettings(),
       ]);
-      const isAdmin = summary.isAdmin === true;
-      const isPro = isAdmin || summary.pro || summary.unlimited;
-      setAdmin(isAdmin);
+      // Admins get Pro-sized allowances, but they are still metered and still
+      // see the meter: the server counts everyone, so hiding it here would only
+      // make the numbers invisible, not absent.
+      const isPro = summary.isAdmin === true || summary.pro || summary.unlimited;
       setPro(isPro);
-      if (isAdmin) return; // admins are exempt from the limits entirely
 
       const tier = isPro ? "pro" : "free";
       const override = settings.usage_limits?.[tier] ?? {};
@@ -124,7 +123,7 @@ const UsageMeter: React.FC<Props> = ({ refreshKey = 0 }) => {
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [refresh]);
 
-  if (admin || !snapshot) return null;
+  if (!snapshot) return null;
 
   const { fiveHour, week } = snapshot;
   const pctFive = percentUsed(fiveHour);

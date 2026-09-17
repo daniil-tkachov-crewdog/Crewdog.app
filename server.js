@@ -129,24 +129,26 @@ app.post("/api/chat", async (req, res) => {
         .json({ error: "Log in to chat with Crewdog.", code: "auth_required" });
     }
 
-    // Admins are exempt; everyone else gets a 5-hour and a weekly allowance.
-    const admin = isAdminUser(req.authUser);
-    const plan = admin ? "pro" : await planForUser(req.userId);
-    if (!admin) {
-      const limit = await checkLimit(req.accessToken, plan);
-      if (limit && limit.allowed === false) {
-        return res.status(429).json({
-          error:
-            limit.exceeded === "week"
-              ? "You've used your weekly limit."
-              : "You've used your 5-hour limit.",
-          code: "limit_reached",
-          window: limit.exceeded,
-          plan,
-          resets_at: limit.resets_at,
-          usage: limit,
-        });
-      }
+    // Everyone is metered, admins included — an untracked account is a hole in
+    // the budget, and the caps are admin-editable if they need to be bigger.
+    // Admins do get the Pro-sized allowance.
+    const plan = isAdminUser(req.authUser)
+      ? "pro"
+      : await planForUser(req.userId);
+
+    const limit = await checkLimit(req.accessToken, plan);
+    if (limit && limit.allowed === false) {
+      return res.status(429).json({
+        error:
+          limit.exceeded === "week"
+            ? "You've used your weekly limit."
+            : "You've used your 5-hour limit.",
+        code: "limit_reached",
+        window: limit.exceeded,
+        plan,
+        resets_at: limit.resets_at,
+        usage: limit,
+      });
     }
 
     const activeModel = model || DEFAULT_MODEL;
@@ -274,9 +276,7 @@ app.post("/api/chat", async (req, res) => {
 
     // Commit what this turn actually cost — chat hops and the job-search
     // pipeline alike, since `usage` accumulates both.
-    const committed = admin
-      ? null
-      : await recordUsage(req.accessToken, plan, usage);
+    const committed = await recordUsage(req.accessToken, plan, usage);
 
     res.json({
       reply: response.output_text ?? "",
