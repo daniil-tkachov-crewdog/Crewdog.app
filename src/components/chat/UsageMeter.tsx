@@ -82,26 +82,35 @@ const UsageMeter: React.FC<Props> = ({ refreshKey = 0 }) => {
 
   const refresh = React.useCallback(async () => {
     if (!user?.id) return;
-    try {
-      const [summary, settings] = await Promise.all([
-        fetchAccountSummary(),
-        getSettings(),
-      ]);
-      // Admins get Pro-sized allowances, but they are still metered and still
-      // see the meter: the server counts everyone, so hiding it here would only
-      // make the numbers invisible, not absent.
-      const isPro = summary.isAdmin === true || summary.pro || summary.unlimited;
-      setPro(isPro);
 
-      const tier = isPro ? "pro" : "free";
-      const override = settings.usage_limits?.[tier] ?? {};
-      const caps: Record<WindowKind, number> = {
-        "5h": override.five_hour ?? DEFAULT_LIMITS[tier]["5h"],
-        week: override.week ?? DEFAULT_LIMITS[tier].week,
-      };
+    // The plan and the caps are looked up on a best-effort basis: the billing
+    // backend is a separate service that can be cold-starting or down, and
+    // getSettings() hits the network too. Neither is allowed to take the meter
+    // down with it — a wrong cap is a cosmetic problem, a missing meter is the
+    // bug this component exists to avoid.
+    const [summary, settings] = await Promise.all([
+      fetchAccountSummary().catch(() => null),
+      getSettings().catch(() => null),
+    ]);
+
+    // Admins get Pro-sized allowances, but they are still metered and still see
+    // the meter: the server counts everyone, so hiding it here would only make
+    // the numbers invisible, not absent.
+    const isPro =
+      summary?.isAdmin === true || !!summary?.pro || !!summary?.unlimited;
+    setPro(isPro);
+
+    const tier = isPro ? "pro" : "free";
+    const override = settings?.usage_limits?.[tier] ?? {};
+    const caps: Record<WindowKind, number> = {
+      "5h": override.five_hour ?? DEFAULT_LIMITS[tier]["5h"],
+      week: override.week ?? DEFAULT_LIMITS[tier].week,
+    };
+
+    try {
       setSnapshot(await fetchUsage(user.id, caps));
     } catch {
-      /* the meter is informational — stay quiet on failure */
+      /* counters unreadable — leave whatever was last shown */
     }
   }, [user?.id]);
 
