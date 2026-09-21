@@ -15,6 +15,10 @@ services:
       # Set these (secrets) in the Render dashboard for this service.
       - key: VITE_SUPABASE_URL
         sync: false
+      # Server-only. Writes visitor rows into app_page_views (bypasses RLS).
+      # Must never be exposed to the browser — note the absent VITE_ prefix.
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
       - key: VITE_SUPABASE_ANON_KEY
         sync: false
       - key: VITE_STRIPE_PUBLISHABLE_KEY

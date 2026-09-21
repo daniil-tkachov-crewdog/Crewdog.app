@@ -14,9 +14,13 @@ import {
   checkLimit,
   recordUsage,
 } from "./usage.js";
+import { recordPageView } from "./traffic.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+// Render puts a proxy in front of us, so the client address lives in
+// x-forwarded-for rather than on the socket. Without this req.ip is the proxy.
+app.set("trust proxy", true);
 // Raised from 1mb to accommodate base64-encoded CV uploads.
 app.use(express.json({ limit: "15mb" }));
 // Populates req.userId from the Supabase bearer token when one is present.
@@ -35,6 +39,23 @@ function systemPrompt() {
 }
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
+
+// POST /api/track — one page view from the SPA.
+//
+// The catch-all below only sees the initial document request, so every
+// client-side route change after that would be invisible without this. The body
+// carries the path and referrer only: the IP, user agent and geo are read from
+// the request itself, so a caller cannot forge where a visit came from. Answers
+// 204 immediately and logs in the background — sendBeacon ignores the response
+// and a tracking failure must never surface to the visitor.
+app.post("/api/track", (req, res) => {
+  res.status(204).end();
+  recordPageView(req, {
+    path: req.body?.path,
+    referrer: req.body?.referrer,
+    userId: req.userId,
+  });
+});
 
 // GET /api/models — list all available models from OpenAI (kept fresh automatically).
 app.get("/api/models", async (_req, res) => {
@@ -448,7 +469,13 @@ function template() {
 // rendered head rather than the raw file.
 app.use(express.static(dist, { index: false }));
 
-app.get("*", async (_req, res) => {
+app.get("*", async (req, res) => {
+  // The one funnel every real page load passes through: static assets are
+  // served above, so anything reaching here is a document request. Logged
+  // fire-and-forget so a tracking outage cannot stop the page rendering.
+  // Subsequent in-app navigations arrive via POST /api/track instead.
+  recordPageView(req, { path: req.path, referrer: req.headers.referer });
+
   let html;
   try {
     html = template();

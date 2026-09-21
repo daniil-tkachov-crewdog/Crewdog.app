@@ -1,11 +1,12 @@
 import { useState } from "react";
+import WebTrafficTab from "./admin/WebTrafficTab";
 import UsersTab from "./admin/UsersTab";
 import ApiTab from "./admin/ApiTab";
 import PromptsTab from "./admin/PromptsTab";
 import AgentTab from "./admin/AgentTab";
 import SeoTab from "./admin/SeoTab";
 
-const TABS = ["Users", "API", "Prompts", "AI Agent", "SEO"] as const;
+const TABS = ["Web Traffic", "Users", "API", "Prompts", "AI Agent", "SEO"] as const;
 type Tab = (typeof TABS)[number];
 
 const Admin = () => {
@@ -38,6 +39,7 @@ const Admin = () => {
       </nav>
 
       <main className="p-6">
+        {active === "Web Traffic" && <WebTrafficTab />}
         {active === "Users" && <UsersTab />}
         {active === "API" && <ApiTab />}
         {active === "Prompts" && <PromptsTab />}
