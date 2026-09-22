@@ -534,7 +534,7 @@ const Chat: React.FC = () => {
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-[10px]">
+          <div className="flex-1 overflow-y-auto overscroll-contain px-[10px]">
             <p className="mx-[10px] mb-[6px] text-[11.5px] font-medium tracking-[0.04em] text-[#6E6B64] dark:text-[#96938C]">
               History
             </p>
@@ -634,7 +634,7 @@ const Chat: React.FC = () => {
   );
 
   return (
-    <div className="flex h-screen w-full bg-white font-grotesk text-[#1A1917] dark:bg-[#17161A] dark:text-[#ECEBE8]">
+    <div className="flex h-screen w-full overflow-hidden supports-[height:100dvh]:h-[100dvh] bg-white font-grotesk text-[#1A1917] dark:bg-[#17161A] dark:text-[#ECEBE8]">
       {/* Sidebar — only for authed users */}
       {isAuthed && (
         <>
@@ -698,7 +698,10 @@ const Chat: React.FC = () => {
           </div>
         </header>
 
-        <div ref={scrollRef} className="flex-1 overflow-y-auto">
+        <div
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto overscroll-contain"
+        >
           <div className="mx-auto w-full max-w-[720px] px-6 pb-6 pt-[10px]">
             {active.messages.length === 0 ? (
               <div className="mt-24 flex flex-col items-center text-center">
