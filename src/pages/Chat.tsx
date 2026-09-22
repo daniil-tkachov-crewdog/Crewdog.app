@@ -33,6 +33,17 @@ type Message = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  // How long the reply took, in ms. Set on assistant messages produced in this
+  // session; older messages loaded from the DB don't carry it.
+  durationMs?: number;
+};
+
+// "8s" / "1m 04s" — how long Crewdog took, short enough to sit next to Copy.
+const formatDuration = (ms: number) => {
+  const total = Math.max(0, Math.round(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return m ? `${m}m ${String(s).padStart(2, "0")}s` : `${s}s`;
 };
 
 type Conversation = {
@@ -70,11 +81,18 @@ const ThinkingIndicator: React.FC = () => {
   const [i, setI] = React.useState(
     () => Math.floor(Math.random() * THINKING_PHRASES.length)
   );
+  // Ticks up while the answer is on its way, so a long wait still feels alive.
+  const [elapsed, setElapsed] = React.useState(0);
   React.useEffect(() => {
     const id = setInterval(
       () => setI((v) => (v + 1) % THINKING_PHRASES.length),
       2200
     );
+    return () => clearInterval(id);
+  }, []);
+  React.useEffect(() => {
+    const startedAt = Date.now();
+    const id = setInterval(() => setElapsed(Date.now() - startedAt), 1000);
     return () => clearInterval(id);
   }, []);
   return (
@@ -94,14 +112,18 @@ const ThinkingIndicator: React.FC = () => {
       >
         {THINKING_PHRASES[i]}
       </span>
+      <span className="text-[13px] tabular-nums text-[#96938C] dark:text-[#6E6B64]">
+        {formatDuration(elapsed)}
+      </span>
     </div>
   );
 };
 
-const CopyButton: React.FC<{ text: string; align: "start" | "end" }> = ({
-  text,
-  align,
-}) => {
+const CopyButton: React.FC<{
+  text: string;
+  align: "start" | "end";
+  durationMs?: number;
+}> = ({ text, align, durationMs }) => {
   const [copied, setCopied] = React.useState(false);
   const copy = async () => {
     try {
@@ -113,7 +135,11 @@ const CopyButton: React.FC<{ text: string; align: "start" | "end" }> = ({
     }
   };
   return (
-    <div className={`flex ${align === "end" ? "justify-end" : "justify-start"}`}>
+    <div
+      className={`flex items-center gap-1 ${
+        align === "end" ? "justify-end" : "justify-start"
+      }`}
+    >
       <button
         onClick={copy}
         aria-label="Copy message"
@@ -127,6 +153,14 @@ const CopyButton: React.FC<{ text: string; align: "start" | "end" }> = ({
         )}
         {copied ? "Copied" : "Copy"}
       </button>
+      {durationMs !== undefined && (
+        <span
+          title="Time taken to answer"
+          className="text-[12px] tabular-nums text-[#6E6B64] dark:text-[#96938C]"
+        >
+          {formatDuration(durationMs)}
+        </span>
+      )}
     </div>
   );
 };
@@ -304,6 +338,7 @@ const Chat: React.FC = () => {
 
     const controller = new AbortController();
     abortRef.current = controller;
+    const startedAt = Date.now();
     setThinking(true);
     setLimitHit(null);
     try {
@@ -351,7 +386,12 @@ const Chat: React.FC = () => {
       if (isAuthed && user && data?.usage) {
         void logTokenUsage(user.id, data?.model ?? settings.chat_model, data.usage);
       }
-      const botMsg: Message = { id: uid(), role: "assistant", content: reply };
+      const botMsg: Message = {
+        id: uid(),
+        role: "assistant",
+        content: reply,
+        durationMs: Date.now() - startedAt,
+      };
       updateConversation(convId, (c) => ({
         ...c,
         messages: [...c.messages, botMsg],
@@ -670,6 +710,7 @@ const Chat: React.FC = () => {
                     <CopyButton
                       text={m.content}
                       align={m.role === "user" ? "end" : "start"}
+                      durationMs={m.durationMs}
                     />
                   </div>
                 ))}
