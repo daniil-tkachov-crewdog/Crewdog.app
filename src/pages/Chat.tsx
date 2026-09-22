@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
-import { Copy, Check, Paperclip, X, FileText } from "lucide-react";
+import { Copy, Check, Paperclip, X, FileText, Square } from "lucide-react";
 import { Wordmark, ThemeToggle } from "@/components/layout/chrome";
 import { renderRichText } from "@/components/chat/richtext";
 import { extractCv, type AttachedCv } from "@/services/cv";
@@ -178,6 +178,8 @@ const Chat: React.FC = () => {
   // In-flight createChat promises, keyed by local id, so the user message and
   // the delayed assistant reply share one insert instead of racing to create two.
   const creating = React.useRef<Record<string, Promise<string>>>({});
+  // Aborts the in-flight turn when the user presses stop.
+  const abortRef = React.useRef<AbortController | null>(null);
 
   const active =
     conversations.find((c) => c.id === activeId) ?? conversations[0];
@@ -300,6 +302,8 @@ const Chat: React.FC = () => {
     if (isAuthed && user)
       void persistUserMessage(convId, displayContent, isFirst);
 
+    const controller = new AbortController();
+    abortRef.current = controller;
     setThinking(true);
     setLimitHit(null);
     try {
@@ -307,6 +311,7 @@ const Chat: React.FC = () => {
       const token = await getAccessToken();
       const res = await fetch("/api/chat", {
         method: "POST",
+        signal: controller.signal,
         headers: {
           "Content-Type": "application/json",
           // The server meters usage per user, so every turn is authenticated.
@@ -354,11 +359,22 @@ const Chat: React.FC = () => {
       if (isAuthed && user) void persistAssistantMessage(convId, reply);
       setUsageKey((k) => k + 1);
     } catch (e) {
-      console.error(e);
-      toast.error("Couldn't reach the assistant. Try again.");
+      // A stopped turn is a deliberate user action, not a failure.
+      if ((e as Error)?.name !== "AbortError") {
+        console.error(e);
+        toast.error("Couldn't reach the assistant. Try again.");
+      }
     } finally {
+      if (abortRef.current === controller) abortRef.current = null;
       setThinking(false);
     }
+  };
+
+  // Cancels the in-flight turn so the composer is free for the next prompt.
+  const stop = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setThinking(false);
   };
 
   // Resolves the conversation's DB id, creating the row once if needed.
@@ -717,12 +733,13 @@ const Chat: React.FC = () => {
               className="max-h-[150px] min-h-[30px] flex-1 resize-none bg-transparent py-[5px] text-[15px] leading-[1.55] text-[#1A1917] outline-none placeholder:text-[#6E6B64] dark:text-[#ECEBE8] dark:placeholder:text-[#96938C]"
             />
             <button
-              onClick={() => send()}
-              disabled={!canSend}
-              aria-label="Send message"
+              onClick={() => (thinking ? stop() : send())}
+              disabled={!thinking && !canSend}
+              aria-label={thinking ? "Stop generating" : "Send message"}
+              title={thinking ? "Stop generating" : "Send message"}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#1A1917] text-[15px] text-white transition-[transform,background] duration-200 hover:-translate-y-[2px] hover:bg-[#E0480F] disabled:pointer-events-none disabled:opacity-40 dark:bg-[#ECEBE8] dark:text-[#17161A] dark:hover:bg-[#FF5A1F] dark:hover:text-white"
             >
-              ↑
+              {thinking ? <Square className="h-[13px] w-[13px] fill-current" /> : "↑"}
             </button>
           </div>
           <p className="mx-auto mt-[10px] max-w-[720px] text-center text-[11.5px] text-[#6E6B64] dark:text-[#96938C]">
