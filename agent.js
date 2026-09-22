@@ -19,12 +19,15 @@ function outputText(resp) {
   return resp?.output_text ?? "";
 }
 
-// Sum token usage from a Responses API result into an accumulator.
+// Sum token usage from a Responses API result into an accumulator. `requests`
+// counts the OpenAI calls themselves, so a turn can be reconciled against the
+// request count on the OpenAI dashboard.
 function addUsage(acc, resp) {
   const u = resp?.usage ?? {};
   acc.input_tokens += u.input_tokens ?? 0;
   acc.output_tokens += u.output_tokens ?? 0;
   acc.total_tokens += u.total_tokens ?? 0;
+  acc.requests += 1;
 }
 
 // Best-effort JSON parse (strips code fences / surrounding prose).
@@ -47,7 +50,7 @@ function parseJson(text, fallback) {
 
 export async function runJobSearch(openai, args = {}, cfg = {}, model = "gpt-4o") {
   const c = { ...DEFAULTS, ...cfg };
-  const usage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
+  const usage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, requests: 0 };
 
   // `args` may be a raw JD string (legacy) or an object with optional fields.
   const a = typeof args === "string" ? { job_description: args } : args ?? {};

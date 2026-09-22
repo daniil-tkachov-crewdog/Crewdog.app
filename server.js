@@ -15,6 +15,7 @@ import {
   recordUsage,
 } from "./usage.js";
 import { recordPageView } from "./traffic.js";
+import { recordChatCall } from "./chatlog.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -129,6 +130,28 @@ app.post("/api/extract-cv", async (req, res) => {
 
 // POST /api/chat  { messages: [{role, content}], model?, webSearch? }
 app.post("/api/chat", async (req, res) => {
+  // Every exit from this handler is logged server-side (see chatlog.js), so a
+  // turn that spends OpenAI credit always leaves a row, whatever it answers.
+  const startedAt = Date.now();
+  const usage = {
+    input_tokens: 0,
+    output_tokens: 0,
+    total_tokens: 0,
+    cached_tokens: 0,
+    requests: 0,
+  };
+  let loggedModel = null;
+  let loggedAgent = false;
+  const log = (status, error) =>
+    recordChatCall(req, {
+      model: loggedModel,
+      agent: loggedAgent,
+      usage,
+      status,
+      startedAt,
+      error,
+    });
+
   try {
     const {
       messages,
@@ -140,11 +163,13 @@ app.post("/api/chat", async (req, res) => {
       agent,
     } = req.body ?? {};
     if (!Array.isArray(messages) || messages.length === 0) {
+      log(400);
       return res.status(400).json({ error: "messages[] is required" });
     }
 
     // Chat costs money per call, so it needs an identity to meter against.
     if (!req.userId) {
+      log(401);
       return res
         .status(401)
         .json({ error: "Log in to chat with Crewdog.", code: "auth_required" });
@@ -159,6 +184,7 @@ app.post("/api/chat", async (req, res) => {
 
     const limit = await checkLimit(req.accessToken, plan);
     if (limit && limit.allowed === false) {
+      log(429);
       return res.status(429).json({
         error:
           limit.exceeded === "week"
@@ -174,6 +200,8 @@ app.post("/api/chat", async (req, res) => {
 
     const activeModel = model || DEFAULT_MODEL;
     const agentEnabled = !!agent?.enabled;
+    loggedModel = activeModel;
+    loggedAgent = agentEnabled;
 
     const tools = [];
     if (webSearch) tools.push({ type: "web_search" });
@@ -230,14 +258,9 @@ app.post("/api/chat", async (req, res) => {
       }
     }
 
-    const usage = {
-      input_tokens: 0,
-      output_tokens: 0,
-      total_tokens: 0,
-      cached_tokens: 0,
-    };
     const bumpUsage = (r) => {
       const u = r?.usage ?? {};
+      usage.requests += 1;
       usage.input_tokens += u.input_tokens ?? 0;
       usage.output_tokens += u.output_tokens ?? 0;
       usage.total_tokens += u.total_tokens ?? 0;
@@ -275,6 +298,7 @@ app.post("/api/chat", async (req, res) => {
           usage.input_tokens += pu.input_tokens;
           usage.output_tokens += pu.output_tokens;
           usage.total_tokens += pu.total_tokens;
+          usage.requests += pu.requests ?? 0;
           out = JSON.stringify(result);
         } catch (e) {
           out = JSON.stringify({ error: String(e?.message || e) });
@@ -299,6 +323,7 @@ app.post("/api/chat", async (req, res) => {
     // pipeline alike, since `usage` accumulates both.
     const committed = await recordUsage(req.accessToken, plan, usage);
 
+    log(200);
     res.json({
       reply: response.output_text ?? "",
       model: activeModel,
@@ -307,6 +332,8 @@ app.post("/api/chat", async (req, res) => {
     });
   } catch (err) {
     console.error("[/api/chat]", err?.message || err);
+    // Tokens already spent before the throw still belong in the log.
+    log(500, err?.message || err);
     res.status(500).json({ error: "Chat request failed" });
   }
 });
