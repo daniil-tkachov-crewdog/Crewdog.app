@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
-import { Copy, Check, Paperclip, X, FileText, Square } from "lucide-react";
+import { Copy, Check, Paperclip, X, FileText, Square, Menu } from "lucide-react";
 import { Wordmark, ThemeToggle } from "@/components/layout/chrome";
 import { renderRichText } from "@/components/chat/richtext";
 import { extractCv, type AttachedCv } from "@/services/cv";
@@ -203,6 +203,8 @@ const Chat: React.FC = () => {
   } | null>(null);
   // Bumped after every reply so the usage meter re-reads its counters.
   const [usageKey, setUsageKey] = React.useState(0);
+  // The sidebar is a permanent column on desktop and a drawer on phones.
+  const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -511,17 +513,18 @@ const Chat: React.FC = () => {
 
   const canSend = (!!input.trim() || !!cv) && !thinking;
 
-  return (
-    <div className="flex h-screen w-full bg-white font-grotesk text-[#1A1917] dark:bg-[#17161A] dark:text-[#ECEBE8]">
-      {/* Sidebar — only for authed users */}
-      {isAuthed && (
-        <aside className="hidden w-[258px] shrink-0 flex-col bg-[#F7F7F5] dark:bg-[#111014] md:flex">
+  // Sidebar contents, shared by the desktop column and the mobile drawer.
+  const sidebarBody = (
+    <>
           <div className="flex flex-col gap-4 px-4 pb-[14px] pt-[18px]">
             <Link to="/chat" className="px-[6px]">
               <Wordmark />
             </Link>
             <button
-              onClick={startNewChat}
+              onClick={() => {
+                startNewChat();
+                setMobileNavOpen(false);
+              }}
               className="flex items-center gap-[10px] rounded-[10px] px-[10px] py-[9px] text-[14px] font-medium transition-[background] duration-150 hover:bg-[rgba(26,25,23,0.06)] dark:hover:bg-[rgba(255,255,255,0.07)]"
             >
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#1A1917] text-[14px] leading-none text-white dark:bg-[#ECEBE8] dark:text-[#17161A]">
@@ -547,7 +550,10 @@ const Chat: React.FC = () => {
                   }`}
                 >
                   <button
-                    onClick={() => selectChat(c)}
+                    onClick={() => {
+                      selectChat(c);
+                      setMobileNavOpen(false);
+                    }}
                     className={`min-w-0 flex-1 truncate px-[10px] py-[9px] text-left text-[13.5px] ${
                       activeRow
                         ? "font-medium text-[#1A1917] dark:text-[#ECEBE8]"
@@ -624,16 +630,61 @@ const Chat: React.FC = () => {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-        </aside>
+    </>
+  );
+
+  return (
+    <div className="flex h-screen w-full bg-white font-grotesk text-[#1A1917] dark:bg-[#17161A] dark:text-[#ECEBE8]">
+      {/* Sidebar — only for authed users */}
+      {isAuthed && (
+        <>
+          {/* Desktop: permanent column */}
+          <aside className="hidden w-[258px] shrink-0 flex-col bg-[#F7F7F5] dark:bg-[#111014] md:flex">
+            {sidebarBody}
+          </aside>
+
+          {/* Mobile: slide-over drawer */}
+          {mobileNavOpen && (
+            <div className="fixed inset-0 z-50 md:hidden">
+              <div
+                className="absolute inset-0 bg-black/40"
+                onClick={() => setMobileNavOpen(false)}
+              />
+              <aside className="absolute left-0 top-0 flex h-full w-[278px] max-w-[85vw] flex-col bg-[#F7F7F5] shadow-xl dark:bg-[#111014]">
+                <button
+                  type="button"
+                  aria-label="Close menu"
+                  onClick={() => setMobileNavOpen(false)}
+                  className="absolute right-2 top-3 rounded-[9px] p-2 text-[#5F5D57] transition hover:bg-[rgba(26,25,23,0.06)] dark:text-[#A6A39C] dark:hover:bg-[rgba(255,255,255,0.07)]"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+                {sidebarBody}
+              </aside>
+            </div>
+          )}
+        </>
       )}
 
       {/* Main chat area */}
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between px-6">
-          <span className="truncate text-[14px] font-medium">
-            {active.messages.length === 0 ? "New chat" : active.title}
-          </span>
-          <div className="flex items-center gap-3">
+        <header className="flex h-14 shrink-0 items-center justify-between gap-3 px-4 md:px-6">
+          <div className="flex min-w-0 items-center gap-1">
+            {isAuthed && (
+              <button
+                type="button"
+                onClick={() => setMobileNavOpen(true)}
+                aria-label="Open menu"
+                className="-ml-2 shrink-0 rounded-[9px] p-2 transition hover:bg-[rgba(26,25,23,0.06)] md:hidden dark:hover:bg-[rgba(255,255,255,0.07)]"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+            )}
+            <span className="truncate text-[14px] font-medium">
+              {active.messages.length === 0 ? "New chat" : active.title}
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-3">
             {isAuthed && <UsageMeter refreshKey={usageKey} />}
             <ThemeToggle />
             {!isAuthed && (
