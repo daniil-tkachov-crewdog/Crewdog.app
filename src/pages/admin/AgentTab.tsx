@@ -1,13 +1,23 @@
 import { useEffect, useState } from "react";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { getSettings, saveSettings, type AgentConfig } from "@/services/settings";
 import { toast } from "sonner";
+import JobDescriptionTab from "./agent/JobDescriptionTab";
+import LinkedinFinderTab from "./agent/LinkedinFinderTab";
 
+const WORKFLOWS = [
+  { key: "jd", label: "Job description" },
+  { key: "finder", label: "LinkedIn finder" },
+] as const;
+
+type WorkflowKey = (typeof WORKFLOWS)[number]["key"];
+
+// Shell for the two agent workflows. Both live in the same app_settings row, so
+// settings load once here and a single Save persists whichever sub-tab was edited.
 const AgentTab = () => {
+  const [workflow, setWorkflow] = useState<WorkflowKey>("jd");
   const [enabled, setEnabled] = useState(false);
+  const [finderEnabled, setFinderEnabled] = useState(false);
   const [cfg, setCfg] = useState<AgentConfig>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -16,6 +26,7 @@ const AgentTab = () => {
     (async () => {
       const s = await getSettings();
       setEnabled(s.agent_enabled);
+      setFinderEnabled(s.linkedin_finder_enabled);
       setCfg(s.agent_config ?? {});
       setLoading(false);
     })();
@@ -27,7 +38,11 @@ const AgentTab = () => {
   const save = async () => {
     setSaving(true);
     try {
-      await saveSettings({ agent_enabled: enabled, agent_config: cfg });
+      await saveSettings({
+        agent_enabled: enabled,
+        linkedin_finder_enabled: finderEnabled,
+        agent_config: cfg,
+      });
       toast.success("AI Agent settings saved");
     } catch (e: any) {
       toast.error(e?.message || "Save failed");
@@ -40,66 +55,32 @@ const AgentTab = () => {
 
   return (
     <div className="max-w-3xl space-y-6">
-      <div className="flex items-center justify-between max-w-xs">
-        <span className="text-sm font-medium">Agent enabled</span>
-        <Switch checked={enabled} onCheckedChange={setEnabled} />
+      <div className="inline-flex rounded-lg border bg-muted/40 p-0.5">
+        {WORKFLOWS.map((w) => (
+          <button
+            key={w.key}
+            onClick={() => setWorkflow(w.key)}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              workflow === w.key
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {w.label}
+          </button>
+        ))}
       </div>
-      <p className="text-xs text-muted-foreground">
-        When on, pasting a job description triggers the pipeline: extract company/title/location →
-        verify company → LinkedIn X-ray for HR &amp; connections (via OpenAI web search).
-      </p>
 
-      <section className="space-y-2 max-w-xs">
-        <label className="text-sm font-medium">Max contacts per search</label>
-        <Input
-          type="number"
-          min={1}
-          max={50}
-          value={cfg.max_contacts ?? 8}
-          onChange={(e) => set("max_contacts", Number(e.target.value))}
+      {workflow === "jd" ? (
+        <JobDescriptionTab enabled={enabled} setEnabled={setEnabled} cfg={cfg} set={set} />
+      ) : (
+        <LinkedinFinderTab
+          enabled={finderEnabled}
+          setEnabled={setFinderEnabled}
+          cfg={cfg}
+          set={set}
         />
-      </section>
-
-      <section className="space-y-2">
-        <label className="text-sm font-medium">HR / recruiter role keywords</label>
-        <Textarea
-          value={cfg.hr_roles ?? ""}
-          onChange={(e) => set("hr_roles", e.target.value)}
-          rows={3}
-          className="font-mono text-sm"
-          placeholder='"recruiter", "talent acquisition", "hiring manager", "HR"'
-        />
-      </section>
-
-      <section className="space-y-2">
-        <label className="text-sm font-medium">Extraction prompt</label>
-        <Textarea
-          value={cfg.extract_instructions ?? ""}
-          onChange={(e) => set("extract_instructions", e.target.value)}
-          rows={4}
-          className="font-mono text-sm"
-        />
-      </section>
-
-      <section className="space-y-2">
-        <label className="text-sm font-medium">Company verification prompt</label>
-        <Textarea
-          value={cfg.verify_instructions ?? ""}
-          onChange={(e) => set("verify_instructions", e.target.value)}
-          rows={4}
-          className="font-mono text-sm"
-        />
-      </section>
-
-      <section className="space-y-2">
-        <label className="text-sm font-medium">LinkedIn search prompt</label>
-        <Textarea
-          value={cfg.search_instructions ?? ""}
-          onChange={(e) => set("search_instructions", e.target.value)}
-          rows={5}
-          className="font-mono text-sm"
-        />
-      </section>
+      )}
 
       <Button onClick={save} disabled={saving}>
         {saving ? "Saving…" : "Save"}

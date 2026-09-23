@@ -1,12 +1,21 @@
 // Global app configuration set by the admin (API tab).
 import { supabase } from "@/lib/supabase";
 
+// Workflow 1 ("Job description") keys are unprefixed; workflow 2
+// ("LinkedIn finder") keys carry a `finder_` prefix. Both live in the same
+// app_settings.agent_config JSON blob, edited from the AI Agent sub-tabs.
 export type AgentConfig = {
   max_contacts?: number;
   hr_roles?: string;
   extract_instructions?: string;
   verify_instructions?: string;
   search_instructions?: string;
+  finder_max_results?: number;
+  finder_min_confidence?: number;
+  finder_search_instructions?: string;
+  finder_verify_instructions?: string;
+  finder_compress_instructions?: string;
+  finder_extra_factor_hints?: string;
 };
 
 // Public-site metadata, edited in the admin SEO tab. The server renders these
@@ -42,6 +51,7 @@ export type AppSettings = {
   system_prompt: string;
   user_prompt_addition: string;
   agent_enabled: boolean;
+  linkedin_finder_enabled: boolean;
   agent_config: AgentConfig;
   seo: SeoSettings;
   usage_limits: UsageLimits;
@@ -55,6 +65,7 @@ const DEFAULTS: AppSettings = {
   system_prompt: "",
   user_prompt_addition: "",
   agent_enabled: false,
+  linkedin_finder_enabled: false,
   agent_config: {},
   seo: {},
   usage_limits: {},
@@ -64,7 +75,7 @@ export async function getSettings(): Promise<AppSettings> {
   // Authenticated users can read the full row directly (RLS: authenticated).
   const { data, error } = await supabase
     .from("app_settings")
-    .select("chat_model, web_search, file_search, system_prompt, user_prompt_addition, agent_enabled, agent_config, seo, usage_limits, updated_at")
+    .select("chat_model, web_search, file_search, system_prompt, user_prompt_addition, agent_enabled, linkedin_finder_enabled, agent_config, seo, usage_limits, updated_at")
     .eq("id", "global")
     .maybeSingle();
   if (!error && data) return { ...DEFAULTS, ...data };

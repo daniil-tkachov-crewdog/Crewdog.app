@@ -7,6 +7,14 @@ import { fileURLToPath } from "node:url";
 import OpenAI from "openai";
 import { PDFParse } from "pdf-parse";
 import { runJobSearch } from "./agent.js";
+import { runLinkedinFinder } from "./linkedinFinder.js";
+
+// Function tools the chat model can call, by name. Each takes
+// (openai, args, config, model) and resolves to { result, usage }.
+const AGENT_HANDLERS = {
+  find_linkedin_connections: runJobSearch,
+  find_linkedin_professionals: runLinkedinFinder,
+};
 import {
   attachUser,
   isAdminUser,
@@ -210,8 +218,9 @@ app.post("/api/chat", async (req, res) => {
 
     const activeModel = model || DEFAULT_MODEL;
     const agentEnabled = !!agent?.enabled;
+    const finderEnabled = !!agent?.linkedin_finder_enabled;
     loggedModel = activeModel;
-    loggedAgent = agentEnabled;
+    loggedAgent = agentEnabled || finderEnabled;
 
     const tools = [];
     if (webSearch) tools.push({ type: "web_search" });
@@ -221,28 +230,45 @@ app.post("/api/chat", async (req, res) => {
         type: "function",
         name: "find_linkedin_connections",
         description:
-          "Find relevant LinkedIn profiles (HR/recruiters and potential connections). Call this whenever the user pastes a job description, OR whenever they directly ask to find people/recruiters/connections (e.g. 'find recruiters at Spotify in Berlin'). Pass the job description when there is one; otherwise pass whatever company/role/location the user specified.",
+          "Find the HR/recruiter contacts and potential connections behind a specific job opening. Call this ONLY when the user has pasted an actual job description. If the user just asks to find people by title and location with no job description, use find_linkedin_professionals instead.",
         parameters: {
           type: "object",
           properties: {
             job_description: {
               type: "string",
-              description: "The full job description text, if the user provided one. Leave empty for a direct connection search.",
+              description: "The full job description text the user pasted. Required — this tool does nothing without it.",
             },
-            company: {
+          },
+          required: ["job_description"],
+          additionalProperties: false,
+        },
+      });
+    }
+    if (finderEnabled) {
+      tools.push({
+        type: "function",
+        name: "find_linkedin_professionals",
+        description:
+          "Search LinkedIn for professionals matching a job title and location, verify each match, and return their profile links. Call this whenever the user asks to find people/professionals/candidates WITHOUT pasting a job description (e.g. 'find me senior nurses in Manchester'). Both job_title and location are required: if the user has not given one of them, ask them for it in your reply instead of calling this tool with a guess. Put any further detail the user mentioned — company, seniority, industry, skills, language — into key_factors so the search and the verification use it.",
+        parameters: {
+          type: "object",
+          properties: {
+            job_title: {
               type: "string",
-              description: "Target company, when no job description is given.",
-            },
-            role: {
-              type: "string",
-              description: "Role/title of interest, when no job description is given.",
+              description: "The job title to search for, e.g. 'backend engineer'. Required.",
             },
             location: {
               type: "string",
-              description: "Location to focus the search on, when no job description is given.",
+              description: "The city, region or country to search in, e.g. 'Berlin'. Required.",
+            },
+            key_factors: {
+              type: "array",
+              items: { type: "string" },
+              description:
+                "Any extra criteria the user gave, one per entry, e.g. ['Zalando', 'senior', 'fintech']. Empty when they gave none.",
             },
           },
-          required: [],
+          required: ["job_title", "location", "key_factors"],
           additionalProperties: false,
         },
       });
@@ -290,7 +316,7 @@ app.post("/api/chat", async (req, res) => {
     // Tool-call loop: run the agent pipeline when the model asks for it.
     for (let hop = 0; hop < 3; hop++) {
       const calls = (response.output ?? []).filter(
-        (o) => o.type === "function_call" && o.name === "find_linkedin_connections"
+        (o) => o.type === "function_call" && AGENT_HANDLERS[o.name]
       );
       if (!calls.length) break;
 
@@ -299,7 +325,7 @@ app.post("/api/chat", async (req, res) => {
         let out;
         try {
           const args = JSON.parse(call.arguments || "{}");
-          const { result, usage: pu } = await runJobSearch(
+          const { result, usage: pu } = await AGENT_HANDLERS[call.name](
             openai,
             args,
             agent?.config ?? {},

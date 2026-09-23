@@ -363,6 +363,7 @@ const Chat: React.FC = () => {
           userPromptAddition: settings.user_prompt_addition,
           agent: {
             enabled: settings.agent_enabled,
+            linkedin_finder_enabled: settings.linkedin_finder_enabled,
             config: settings.agent_config ?? {},
           },
         }),

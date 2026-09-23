@@ -1,6 +1,9 @@
-// Job-search agent pipeline (no n8n, no SerpAPI).
+// Workflow 1 — "Job description" agent pipeline (no n8n, no SerpAPI).
 // JD -> extract company/title/location -> verify company -> LinkedIn X-ray
 // (HR + connections) using OpenAI's built-in web_search tool.
+//
+// Searches that start from a title + location instead of a JD are workflow 2,
+// "LinkedIn finder" (see linkedinFinder.js).
 
 const DEFAULTS = {
   max_contacts: 8,
@@ -15,14 +18,14 @@ const DEFAULTS = {
 };
 
 // Pull the assistant text out of a Responses API result.
-function outputText(resp) {
+export function outputText(resp) {
   return resp?.output_text ?? "";
 }
 
 // Sum token usage from a Responses API result into an accumulator. `requests`
 // counts the OpenAI calls themselves, so a turn can be reconciled against the
 // request count on the OpenAI dashboard.
-function addUsage(acc, resp) {
+export function addUsage(acc, resp) {
   const u = resp?.usage ?? {};
   acc.input_tokens += u.input_tokens ?? 0;
   acc.output_tokens += u.output_tokens ?? 0;
@@ -31,7 +34,7 @@ function addUsage(acc, resp) {
 }
 
 // Best-effort JSON parse (strips code fences / surrounding prose).
-function parseJson(text, fallback) {
+export function parseJson(text, fallback) {
   if (!text) return fallback;
   try {
     return JSON.parse(text);
@@ -56,30 +59,32 @@ export async function runJobSearch(openai, args = {}, cfg = {}, model = "gpt-4o"
   const a = typeof args === "string" ? { job_description: args } : args ?? {};
   const jobDescription = String(a.job_description ?? "").slice(0, 12000);
 
-  let extracted;
-  if (jobDescription.trim()) {
-    // 1a) Job description given -> extract company / title / location.
-    const extractResp = await openai.responses.create({
-      model,
-      instructions: c.extract_instructions,
-      input: `Job description:\n${jobDescription}\n\nReturn ONLY JSON: {"company": string, "company_simplified": string, "title": string, "location": string}`,
-    });
-    addUsage(usage, extractResp);
-    extracted = parseJson(outputText(extractResp), {
-      company: "",
-      company_simplified: "",
-      title: "",
-      location: "",
-    });
-  } else {
-    // 1b) No JD -> direct connection search from the user's criteria.
-    extracted = {
-      company: String(a.company ?? ""),
-      company_simplified: String(a.company ?? ""),
-      title: String(a.role ?? ""),
-      location: String(a.location ?? ""),
+  // This workflow is job-description-only. Searches without a JD belong to the
+  // LinkedIn finder workflow (linkedinFinder.js), so bail out and let the model
+  // re-route rather than silently running a weaker search.
+  if (!jobDescription.trim()) {
+    return {
+      result: {
+        error: "no_job_description",
+        note: "This workflow needs a job description. For a title/location search, call find_linkedin_professionals instead.",
+      },
+      usage,
     };
   }
+
+  // 1) Extract company / title / location from the job description.
+  const extractResp = await openai.responses.create({
+    model,
+    instructions: c.extract_instructions,
+    input: `Job description:\n${jobDescription}\n\nReturn ONLY JSON: {"company": string, "company_simplified": string, "title": string, "location": string}`,
+  });
+  addUsage(usage, extractResp);
+  const extracted = parseJson(outputText(extractResp), {
+    company: "",
+    company_simplified: "",
+    title: "",
+    location: "",
+  });
 
   // 2) Verify the company (web search) — only when a company is known.
   let verification = {
