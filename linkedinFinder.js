@@ -53,6 +53,7 @@ function enrich(candidates, limit) {
       location: String(cand?.location ?? "").trim(),
       linkedin_url: url,
       evidence: String(cand?.snippet ?? cand?.headline ?? "").trim(),
+      availability_signal: String(cand?.availability_signal ?? "").trim(),
     });
     if (out.length >= limit) break;
   }
@@ -104,7 +105,7 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
       (keyFactors.length ? `Other key factors: ${keyFactors.join(", ")}\n` : "") +
       `Common extra factors to watch for: ${c.finder_extra_factor_hints}\n\n` +
       `Run this query (and sensible variations of it):\n${query}\n\n` +
-      `Return ONLY JSON: {"candidates":[{"name":string,"headline":string,"title":string,"company":string,"location":string,"linkedin_url":string,"snippet":string}]}`,
+      `Return ONLY JSON: {"candidates":[{"name":string,"headline":string,"title":string,"company":string,"location":string,"linkedin_url":string,"snippet":string,"availability_signal":string}]}`,
   });
   addUsage(usage, searchResp);
   const searchOut = parseJson(outputText(searchResp), { candidates: [] });
@@ -114,7 +115,15 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
   const candidates = enrich(rawCandidates, maxResults);
   if (!candidates.length) {
     return {
-      result: { query, criteria, profiles: [], dropped_count: rawCandidates.length, checked_count: 0 },
+      result: {
+        query,
+        criteria,
+        profiles: [],
+        near_misses: [],
+        checked_count: 0,
+        dropped_count: rawCandidates.length,
+        presentation: c.finder_compress_instructions,
+      },
       usage,
     };
   }
@@ -142,21 +151,36 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
   );
 
   // 5) Compress: keep the ones that passed, drop the verifier's working notes.
+  // A factor like "available to work" is often simply absent from a search
+  // snippet, so a strict pass can legitimately clear the whole list. Rather than
+  // hand back nothing, keep the candidates that failed only on those unprovable
+  // factors as near misses — surfaced only when nothing passed outright, and
+  // labelled so the chat reply can never present them as confirmed matches.
   const profiles = [];
+  const nearMisses = [];
   for (const cand of candidates) {
     const v = verdicts.get(cand.linkedin_url);
     const confidence = Number(v?.confidence ?? 0);
-    if (!v?.verified || confidence < minConfidence) continue;
-    profiles.push({
+    const shaped = {
       name: cand.name,
       title: cand.title || cand.headline,
       company: cand.company,
       location: cand.location,
       linkedin_url: cand.linkedin_url,
-      matched_factors: Array.isArray(v.matched_factors) ? v.matched_factors : [],
+      matched_factors: Array.isArray(v?.matched_factors) ? v.matched_factors : [],
       confidence,
-    });
-    if (profiles.length >= maxResults) break;
+    };
+    if (v?.verified && confidence >= minConfidence) {
+      if (profiles.length < maxResults) profiles.push(shaped);
+      continue;
+    }
+    if (nearMisses.length < maxResults) {
+      nearMisses.push({
+        ...shaped,
+        unconfirmed_factors: Array.isArray(v?.missing_factors) ? v.missing_factors : [],
+        availability_signal: cand.availability_signal,
+      });
+    }
   }
 
   return {
@@ -164,6 +188,9 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
       query,
       criteria,
       profiles,
+      // Only offered as a fallback, so a run that found real matches never
+      // dilutes them with unverified ones.
+      near_misses: profiles.length ? [] : nearMisses,
       checked_count: candidates.length,
       dropped_count: candidates.length - profiles.length,
       presentation: c.finder_compress_instructions,

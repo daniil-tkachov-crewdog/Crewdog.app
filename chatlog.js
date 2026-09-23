@@ -20,7 +20,7 @@ if (!enabled) {
 // of OpenAI calls the turn actually made.
 export function recordChatCall(
   req,
-  { model, agent, usage, status, startedAt, error } = {}
+  { model, agent, agentCalls, usage, status, startedAt, error } = {}
 ) {
   const u = usage ?? {};
   const row = {
@@ -30,6 +30,7 @@ export function recordChatCall(
     origin: String(req?.headers?.origin ?? req?.headers?.referer ?? "").slice(0, 300) || null,
     model: model ?? null,
     agent: !!agent,
+    agent_calls: Array.isArray(agentCalls) && agentCalls.length ? agentCalls : null,
     requests: u.requests ?? 0,
     input_tokens: u.input_tokens ?? 0,
     output_tokens: u.output_tokens ?? 0,
@@ -47,7 +48,9 @@ export function recordChatCall(
       row.model ?? "-"
     } agent=${row.agent} requests=${row.requests} tokens=${row.total_tokens} status=${
       row.status ?? "-"
-    }${row.error ? ` error=${row.error}` : ""}`
+    }${row.error ? ` error=${row.error}` : ""}${
+      row.agent_calls ? ` agent_calls=${JSON.stringify(row.agent_calls)}` : ""
+    }`
   );
 
   if (!enabled) return;

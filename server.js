@@ -15,6 +15,30 @@ const AGENT_HANDLERS = {
   find_linkedin_connections: runJobSearch,
   find_linkedin_professionals: runLinkedinFinder,
 };
+
+// A log-sized record of one workflow run: the criteria the model chose and how
+// many people survived each stage. Deliberately counts, not people — the log is
+// for diagnosing the pipeline, not for storing anyone's profile.
+function summarizeAgentCall(name, args, result) {
+  const row = { tool: name };
+  if (name === "find_linkedin_professionals") {
+    row.job_title = String(args?.job_title ?? "").slice(0, 120);
+    row.location = String(args?.location ?? "").slice(0, 120);
+    row.key_factors = (Array.isArray(args?.key_factors) ? args.key_factors : [])
+      .map((f) => String(f ?? "").slice(0, 80))
+      .slice(0, 8);
+    row.checked = result?.checked_count ?? 0;
+    row.returned = result?.profiles?.length ?? 0;
+    row.near_misses = result?.near_misses?.length ?? 0;
+  } else {
+    row.had_job_description = Boolean(String(args?.job_description ?? "").trim());
+    row.company = String(result?.extracted?.company ?? "").slice(0, 120);
+    row.location = String(result?.extracted?.location ?? "").slice(0, 120);
+    row.returned = result?.contacts?.length ?? 0;
+  }
+  if (result?.error) row.error = String(result.error).slice(0, 120);
+  return row;
+}
 import {
   attachUser,
   isAdminUser,
@@ -160,10 +184,15 @@ app.post("/api/chat", async (req, res) => {
   };
   let loggedModel = null;
   let loggedAgent = false;
+  // What the model actually asked each workflow for, and what came back. Without
+  // this a disappointing answer is unattributable: you cannot tell a criterion
+  // the model silently dropped from one the search genuinely could not fill.
+  const agentCalls = [];
   const log = (status, error) =>
     recordChatCall(req, {
       model: loggedModel,
       agent: loggedAgent,
+      agentCalls,
       usage,
       status,
       startedAt,
@@ -249,7 +278,7 @@ app.post("/api/chat", async (req, res) => {
         type: "function",
         name: "find_linkedin_professionals",
         description:
-          "Search LinkedIn for professionals matching a job title and location, verify each match, and return their profile links. Call this whenever the user asks to find people/professionals/candidates WITHOUT pasting a job description (e.g. 'find me senior nurses in Manchester'). Both job_title and location are required: if the user has not given one of them, ask them for it in your reply instead of calling this tool with a guess. Put any further detail the user mentioned — company, seniority, industry, skills, language — into key_factors so the search and the verification use it.",
+          "Search LinkedIn for professionals matching a job title and location, verify each match, and return their profile links. Call this whenever the user asks to find people/professionals/candidates WITHOUT pasting a job description (e.g. 'find me senior nurses in Manchester'). Both job_title and location are required: if the user has not given one of them, ask them for it in your reply instead of calling this tool with a guess. Put EVERY further qualifier the user mentioned into key_factors — availability ('available to work', 'open to work', 'actively looking', 'free to start'), company, seniority, industry, skills, certifications, language, current vs past employer. Never drop a qualifier because it seems vague or hard to search for: the pipeline knows how to look for these and how to report the ones it could not confirm.",
         parameters: {
           type: "object",
           properties: {
@@ -335,8 +364,10 @@ app.post("/api/chat", async (req, res) => {
           usage.output_tokens += pu.output_tokens;
           usage.total_tokens += pu.total_tokens;
           usage.requests += pu.requests ?? 0;
+          agentCalls.push(summarizeAgentCall(call.name, args, result));
           out = JSON.stringify(result);
         } catch (e) {
+          agentCalls.push({ tool: call.name, error: String(e?.message || e).slice(0, 300) });
           out = JSON.stringify({ error: String(e?.message || e) });
         }
         toolOutputs.push({
