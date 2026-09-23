@@ -171,7 +171,7 @@ const STARTER_PROMPTS = [
   "Who is the real data centre employer behind this job ad?",
   "Find the hiring manager for a data centre role I'm applying to",
   "Write me a LinkedIn message to a data centre hiring manager",
-  "Which data centre companies are hiring for my skills right now?",
+  "Find data centre technicians in London who are open to work right now",
 ];
 
 const Chat: React.FC = () => {
