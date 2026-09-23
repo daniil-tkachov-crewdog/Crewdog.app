@@ -16,12 +16,22 @@ import {
 } from "./usage.js";
 import { recordPageView } from "./traffic.js";
 import { recordChatCall } from "./chatlog.js";
+import { isBlockedPath } from "./blocklist.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 // Render puts a proxy in front of us, so the client address lives in
 // x-forwarded-for rather than on the socket. Without this req.ip is the proxy.
 app.set("trust proxy", true);
+// Vulnerability scanners (/.git/HEAD, /.env, /wp-login.php, …) get a bare 404
+// before they reach body parsing, static files or the SPA handler. The view is
+// still logged, so these probes stay visible in the admin traffic tab. Search
+// and AI crawlers never request these paths, so indexing is unaffected.
+app.use((req, res, next) => {
+  if (!isBlockedPath(req.path)) return next();
+  recordPageView(req, { path: req.path, referrer: req.headers.referer });
+  res.status(404).type("text/plain").send("Not found");
+});
 // Raised from 1mb to accommodate base64-encoded CV uploads.
 app.use(express.json({ limit: "15mb" }));
 // Populates req.userId from the Supabase bearer token when one is present.
