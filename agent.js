@@ -5,17 +5,7 @@
 // Searches that start from a title + location instead of a JD are workflow 2,
 // "LinkedIn finder" (see linkedinFinder.js).
 
-const DEFAULTS = {
-  max_contacts: 8,
-  hr_roles:
-    '"human resources", "recruiter", "talent acquisition", "hiring manager", "people team", "HR"',
-  extract_instructions:
-    "You extract structured data from a job description. Return the hiring company, simplified company variants, the job title, and the job location.",
-  verify_instructions:
-    "You verify that a company is real using web search. Return whether it exists, its canonical name, and its primary website domain.",
-  search_instructions:
-    "You find real LinkedIn member profiles via web search using Google X-ray queries of the form: site:linkedin.com/in/ AND (role terms) AND (company) AND (location). Return only genuine linkedin.com/in/ profile URLs.",
-};
+import { JOB_DESCRIPTION_DEFAULTS as DEFAULTS } from "./agentPrompts.js";
 
 // Pull the assistant text out of a Responses API result.
 export function outputText(resp) {
@@ -132,5 +122,3 @@ export async function runJobSearch(openai, args = {}, cfg = {}, model = "gpt-4o"
     usage,
   };
 }
-
-export const AGENT_DEFAULTS = DEFAULTS;

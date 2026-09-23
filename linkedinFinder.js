@@ -8,19 +8,7 @@
 // the seam where a real scraper or profile API would slot in later.
 
 import { outputText, addUsage, parseJson } from "./agent.js";
-
-const DEFAULTS = {
-  finder_max_results: 8,
-  finder_min_confidence: 0.5,
-  finder_search_instructions:
-    "You find real LinkedIn member profiles via web search, restricted to the linkedin.com domain. Use Google X-ray queries of the form: site:linkedin.com/in/ \"title\" \"location\" \"extra factor\". Return only genuine linkedin.com/in/ profile URLs, never company pages, job posts or search pages. Copy the search result snippet verbatim for each hit — it is the evidence a later step verifies against.",
-  finder_verify_instructions:
-    "You verify LinkedIn profile candidates against the recruiter's criteria. For each candidate decide whether the evidence actually shows the required job title, the required location, and each extra key factor. Be strict: if the evidence does not support a factor, mark it missing rather than assuming. A usable linkedin.com/in/ URL is itself one of the criteria.",
-  finder_compress_instructions:
-    "You present verified LinkedIn profiles to a recruiter as a compact list: one line per person with name, title, company, location and the profile URL. No preamble, no repetition of the criteria.",
-  finder_extra_factor_hints:
-    "company, seniority, industry, skills, language, current vs past employer",
-};
+import { LINKEDIN_FINDER_DEFAULTS as DEFAULTS } from "./agentPrompts.js";
 
 // linkedin.com/in/<slug> — anything else (company pages, job posts, search
 // result pages, other domains) is not a person and gets dropped.
@@ -183,5 +171,3 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
     usage,
   };
 }
-
-export const LINKEDIN_FINDER_DEFAULTS = DEFAULTS;

@@ -2,6 +2,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type { AgentConfig } from "@/services/settings";
+import { JOB_DESCRIPTION_DEFAULTS as D } from "../../../../agentPrompts.js";
 
 type Props = {
   enabled: boolean;
@@ -29,7 +30,7 @@ const JobDescriptionTab = ({ enabled, setEnabled, cfg, set }: Props) => (
         type="number"
         min={1}
         max={50}
-        value={cfg.max_contacts ?? 8}
+        value={cfg.max_contacts ?? D.max_contacts}
         onChange={(e) => set("max_contacts", Number(e.target.value))}
       />
     </section>
@@ -37,20 +38,19 @@ const JobDescriptionTab = ({ enabled, setEnabled, cfg, set }: Props) => (
     <section className="space-y-2">
       <label className="text-sm font-medium">HR / recruiter role keywords</label>
       <Textarea
-        value={cfg.hr_roles ?? ""}
+        value={cfg.hr_roles ?? D.hr_roles}
         onChange={(e) => set("hr_roles", e.target.value)}
         rows={3}
         className="font-mono text-sm"
-        placeholder='"recruiter", "talent acquisition", "hiring manager", "HR"'
       />
     </section>
 
     <section className="space-y-2">
       <label className="text-sm font-medium">Extraction prompt</label>
       <Textarea
-        value={cfg.extract_instructions ?? ""}
+        value={cfg.extract_instructions ?? D.extract_instructions}
         onChange={(e) => set("extract_instructions", e.target.value)}
-        rows={4}
+        rows={13}
         className="font-mono text-sm"
       />
     </section>
@@ -58,9 +58,9 @@ const JobDescriptionTab = ({ enabled, setEnabled, cfg, set }: Props) => (
     <section className="space-y-2">
       <label className="text-sm font-medium">Company verification prompt</label>
       <Textarea
-        value={cfg.verify_instructions ?? ""}
+        value={cfg.verify_instructions ?? D.verify_instructions}
         onChange={(e) => set("verify_instructions", e.target.value)}
-        rows={4}
+        rows={13}
         className="font-mono text-sm"
       />
     </section>
@@ -68,9 +68,9 @@ const JobDescriptionTab = ({ enabled, setEnabled, cfg, set }: Props) => (
     <section className="space-y-2">
       <label className="text-sm font-medium">LinkedIn search prompt</label>
       <Textarea
-        value={cfg.search_instructions ?? ""}
+        value={cfg.search_instructions ?? D.search_instructions}
         onChange={(e) => set("search_instructions", e.target.value)}
-        rows={5}
+        rows={15}
         className="font-mono text-sm"
       />
     </section>

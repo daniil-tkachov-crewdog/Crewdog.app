@@ -2,6 +2,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type { AgentConfig } from "@/services/settings";
+import { LINKEDIN_FINDER_DEFAULTS as D } from "../../../../agentPrompts.js";
 
 type Props = {
   enabled: boolean;
@@ -33,7 +34,7 @@ const LinkedinFinderTab = ({ enabled, setEnabled, cfg, set }: Props) => (
           type="number"
           min={1}
           max={50}
-          value={cfg.finder_max_results ?? 8}
+          value={cfg.finder_max_results ?? D.finder_max_results}
           onChange={(e) => set("finder_max_results", Number(e.target.value))}
         />
       </section>
@@ -45,7 +46,7 @@ const LinkedinFinderTab = ({ enabled, setEnabled, cfg, set }: Props) => (
           min={0}
           max={1}
           step={0.05}
-          value={cfg.finder_min_confidence ?? 0.5}
+          value={cfg.finder_min_confidence ?? D.finder_min_confidence}
           onChange={(e) => set("finder_min_confidence", Number(e.target.value))}
         />
       </section>
@@ -60,20 +61,19 @@ const LinkedinFinderTab = ({ enabled, setEnabled, cfg, set }: Props) => (
     <section className="space-y-2">
       <label className="text-sm font-medium">Key factor hints</label>
       <Textarea
-        value={cfg.finder_extra_factor_hints ?? ""}
+        value={cfg.finder_extra_factor_hints ?? D.finder_extra_factor_hints}
         onChange={(e) => set("finder_extra_factor_hints", e.target.value)}
         rows={2}
         className="font-mono text-sm"
-        placeholder="company, seniority, industry, skills, language"
       />
     </section>
 
     <section className="space-y-2">
       <label className="text-sm font-medium">Search prompt</label>
       <Textarea
-        value={cfg.finder_search_instructions ?? ""}
+        value={cfg.finder_search_instructions ?? D.finder_search_instructions}
         onChange={(e) => set("finder_search_instructions", e.target.value)}
-        rows={5}
+        rows={16}
         className="font-mono text-sm"
       />
     </section>
@@ -81,9 +81,9 @@ const LinkedinFinderTab = ({ enabled, setEnabled, cfg, set }: Props) => (
     <section className="space-y-2">
       <label className="text-sm font-medium">Verification prompt</label>
       <Textarea
-        value={cfg.finder_verify_instructions ?? ""}
+        value={cfg.finder_verify_instructions ?? D.finder_verify_instructions}
         onChange={(e) => set("finder_verify_instructions", e.target.value)}
-        rows={5}
+        rows={18}
         className="font-mono text-sm"
       />
     </section>
@@ -91,9 +91,9 @@ const LinkedinFinderTab = ({ enabled, setEnabled, cfg, set }: Props) => (
     <section className="space-y-2">
       <label className="text-sm font-medium">Presentation prompt</label>
       <Textarea
-        value={cfg.finder_compress_instructions ?? ""}
+        value={cfg.finder_compress_instructions ?? D.finder_compress_instructions}
         onChange={(e) => set("finder_compress_instructions", e.target.value)}
-        rows={3}
+        rows={9}
         className="font-mono text-sm"
       />
     </section>
