@@ -32,7 +32,7 @@ const AgentTab = () => {
     })();
   }, []);
 
-  const set = (k: keyof AgentConfig, v: string | number) =>
+  const set = (k: keyof AgentConfig, v: string | number | string[]) =>
     setCfg((c) => ({ ...c, [k]: v }));
 
   const save = async () => {

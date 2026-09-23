@@ -27,6 +27,7 @@ function summarizeAgentCall(name, args, result) {
     row.key_factors = (Array.isArray(args?.key_factors) ? args.key_factors : [])
       .map((f) => String(f ?? "").slice(0, 80))
       .slice(0, 8);
+    row.routes = Array.isArray(result?.routes) ? result.routes : [];
     row.checked = result?.checked_count ?? 0;
     row.returned = result?.profiles?.length ?? 0;
     row.near_misses = result?.near_misses?.length ?? 0;

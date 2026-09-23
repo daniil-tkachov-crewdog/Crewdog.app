@@ -48,30 +48,100 @@ export const JOB_DESCRIPTION_DEFAULTS = {
   ].join("\n"),
 };
 
+// Discovery routes for workflow 2. The same person is reachable from several
+// directions, and the strongest signal — someone saying they are free — is
+// rarely on the profile itself, so each route is its own search pass and the
+// results are merged on the profile URL.
+//
+// Each enabled route costs one extra web search call per run, which is why the
+// two cheap, general ones are on by default and the rest are opt-in.
+export const FINDER_ROUTES = [
+  {
+    key: "person",
+    label: "Person first",
+    default: true,
+    description: "People whose experience matches the requirement, by title and by skill.",
+    focus: [
+      "Find people whose current or previous experience matches the requirement.",
+      "Search the exact job title, adjacent titles, and the alternative terminology used for the same or transferable skills in this discipline and sector — a title alone is not the requirement.",
+      "Weigh discipline, sector, project type and named clients as heavily as the title itself.",
+    ].join("\n"),
+  },
+  {
+    key: "availability",
+    label: "Availability",
+    default: true,
+    description: "Posts and headlines where people say they are free or looking.",
+    focus: [
+      "Find people in this discipline and location who have publicly signalled that they are available or looking.",
+      'Search for: "open to work", "#OpenToWork", "available immediately", "looking for work", "looking for my next contract", "seeking a new role", "interested in opportunities", "available from", "available for rotation", "between roles", "currently available".',
+      "Record the signal wording and the date it was posted. An undated or old signal is not evidence that someone is free now.",
+    ].join("\n"),
+  },
+  {
+    key: "vacancy",
+    label: "Vacancy comments",
+    default: false,
+    description: "Recruiter posts, then the people replying that they are interested.",
+    focus: [
+      "Find recent vacancies and recruiter posts relevant to the requirement, then look at their public comments for people putting themselves forward.",
+      'Search comment wording such as "interested", "available", "CV sent", "DM sent", "please contact me", "I have X years experience", "available immediately".',
+      "A comment establishes interest, never competence. Capture the person and the comment, and leave their technical match to be established from their profile.",
+    ].join("\n"),
+  },
+  {
+    key: "project",
+    label: "Project completion",
+    default: false,
+    description: "People announcing a contract or project is ending.",
+    focus: [
+      "Find people announcing that a project, assignment or contract is ending.",
+      'Search for "finishing my contract", "project completed", "coming to the end of", "last day", "demobilising", "available next month" and equivalents.',
+      "Capture what they were doing on that project, and the date the post was made.",
+    ].join("\n"),
+  },
+  {
+    key: "team",
+    label: "Team availability",
+    default: false,
+    description: "Crews and groups coming off a project together.",
+    focus: [
+      "Find groups of workers becoming available, not only individuals.",
+      'Search for "our team is available", "crew available", "engineers available", "coming off project", "available for mobilisation".',
+      "Capture who speaks for the group and how many people it covers.",
+    ].join("\n"),
+  },
+];
+
 // Workflow 2 — "LinkedIn finder".
 export const LINKEDIN_FINDER_DEFAULTS = {
   finder_max_results: 8,
   finder_min_confidence: 0.5,
+  finder_routes: FINDER_ROUTES.filter((r) => r.default).map((r) => r.key),
+  finder_signal_max_age_days: 90,
   finder_extra_factor_hints:
     "availability (open to work / actively looking), company, seniority, industry, skills, certifications, language, current vs past employer",
   finder_search_instructions: [
-    "You find real LinkedIn member profiles via web search, restricted to the linkedin.com domain, so a recruiter can approach them directly.",
+    "You search public professional sources for evidence about people, so a recruiter can approach the right ones. You are not browsing profiles: you are collecting evidence, and a strong candidate is often assembled from several individually weak signals — occupation, a named project, location history, an open-to-work post, a comment on a vacancy.",
     "",
-    "Use Google X-ray queries of the form:",
-    'site:linkedin.com/in/ "job title" "location" "key factor"',
-    "Run the query you are given, then sensible variations of it: common synonyms for the title, the surrounding metro area or region for the location, and the key factors dropped one at a time when the search returns very little.",
+    "These instructions are occupation agnostic. They apply to engineers, technicians, inspectors, trades, consultants, supervisors, project managers and whole crews alike.",
     "",
-    "When one of the key factors is availability — open to work, actively looking, seeking a role, free to start — it is not a word people put in their job title. Search for how LinkedIn actually shows it, and combine these with the title and location:",
-    '"open to work", "#OpenToWork", "opentowork", "seeking new opportunities", "actively seeking", "looking for new opportunities", "immediately available", "available for contract", "available for work", "between roles", "currently available"',
-    "Put whatever you find that shows availability into the availability_signal field, quoted from the result, and leave it empty when the result shows none. Never treat a job title alone as evidence of availability.",
+    "Work the discovery route you are given for this pass, using Google X-ray queries against linkedin.com — profiles, posts and the public comments under posts:",
+    'site:linkedin.com/in/ "job title" "location" "key factor", and site:linkedin.com/posts/ for posts and their comments.',
+    "Run the query you are given, then sensible variations: adjacent and alternative titles for the same skills, the surrounding metro area or region, and the key factors dropped one at a time when a search returns very little.",
+    "",
+    "Location is evidence, not a filter. Someone based elsewhere who has worked in the requested country, region or offshore location, or who states rotation or mobility, is a legitimate result — put what you saw in mobility_evidence.",
+    "",
+    "Dates matter. Whenever the evidence is a post or a comment, record when it was published in signal_date, exactly as shown (a date, or wording like '2 weeks ago'). An availability signal without a date cannot be treated as current.",
     "",
     "Rules:",
-    "- Return only genuine linkedin.com/in/ profile URLs. Never company pages, job posts, LinkedIn search or directory URLs, or other sites.",
+    "- Return only genuine linkedin.com/in/ profile URLs for the person. A post or comment is where you found them; the profile is who they are. Never return company pages, job posts, or LinkedIn search and directory URLs as the person.",
     "- Every profile must come from an actual search result, with the URL copied exactly as it appeared. Never construct a profile URL from someone's name, and never reuse an example from these instructions.",
-    "- Copy the search result snippet into the snippet field verbatim. It is the only evidence the verification step gets, so do not summarise, clean up or embellish it. If a result has no snippet, use the page title.",
+    "- Copy the search result snippet, post text or comment into the snippet field verbatim. It is the only evidence the verification step gets, so do not summarise, clean up or embellish it. If a result has no snippet, use the page title.",
+    "- Put the availability wording, quoted, in availability_signal, and leave it empty when there is none. A job title, a freelance or contractor role and an employment gap are never availability signals.",
+    "- Say where each person came from in evidence_source: profile, post, comment on a vacancy, or project announcement.",
     "- Fill name, title, company and location only from what the result actually shows. Leave a field empty rather than inferring it.",
-    "- Prefer people whose current role matches the title over people who held it in the past.",
-    "- Return fewer profiles rather than padding the list with weak matches; the next step will discard anything the evidence does not support.",
+    "- Return fewer people rather than padding the list with weak matches; the next step will discard anything the evidence does not support.",
   ].join("\n"),
   finder_verify_instructions: [
     "You verify LinkedIn profile candidates against a recruiter's criteria. Your job is to keep the list honest, so be strict.",
@@ -83,20 +153,28 @@ export const LINKEDIN_FINDER_DEFAULTS = {
     "- Availability (open to work, actively looking, free to start) is matched only by an explicit signal in the evidence: an open-to-work badge or hashtag, or wording like seeking, looking for, immediately available, available for contract, between roles. A job title, a freelance or contractor role, an employment gap, and a consultant headline are all NOT availability signals. When the evidence shows no such wording, availability is a missing factor, however likely it seems.",
     "- A usable linkedin.com/in/ profile URL is itself a criterion. Anything that is not a personal profile fails.",
     "",
-    "List every criterion you could confirm in matched_factors and every one you could not in missing_factors.",
+    "Three rules about what evidence can carry:",
+    "- Recency. Never treat someone as available now on an undated or stale signal. You are told the maximum age a signal may have; beyond it, or with no date at all, availability is unconfirmed and you say so in missing_factors.",
+    "- A comment establishes interest, not competence. Someone replying 'interested' or 'CV sent' under a vacancy has told you they want the work, and nothing about whether they can do it. Their technical match must come from their profile evidence, separately.",
+    "- Claimed is not confirmed. Self-reported skills, certifications and licences stay claimed unless the evidence corroborates them. Never promote a claim to a confirmed fact.",
+    "",
+    "List every criterion you could confirm in matched_factors and every one you could not in missing_factors, and name in unverified anything the person claims that the evidence does not corroborate.",
     "Set verified to true only when the title, the location and all key factors are matched.",
     "Set confidence to how strongly the evidence supports the whole match: 0.9+ when it states each criterion outright, around 0.6 when it strongly implies them, below 0.5 when you are largely inferring.",
     "Give a one-sentence reason quoting the part of the evidence you relied on.",
     "",
-    "The evidence is a search snippet and is often short. Absent evidence is a missing factor, never an assumed one, and a plausible-sounding name or headline is not evidence. Do not use outside knowledge about these people, and do not invent candidates that were not given to you.",
+    "Evidence is often a short snippet. Absent evidence is a missing factor, never an assumed one, and a plausible-sounding name or headline is not evidence. Do not use outside knowledge about these people, and do not invent candidates that were not given to you.",
   ].join("\n"),
   finder_compress_instructions: [
     "You present verified LinkedIn profiles to a recruiter as a compact list.",
     "",
-    "One line per person: name — title at company, location — profile URL.",
+    "One line per person: name — title at company, location — availability signal and its date when there is one — profile URL.",
     "- Order by confidence, strongest first.",
     "- Note in the line itself when a key factor was only partially matched.",
-    "- No preamble, no restating the criteria, no closing summary, no invented contact details.",
+    "- Say 'available' only where a dated, recent signal supports it. Otherwise give the signal wording and its date and let the recruiter judge, or say availability is unconfirmed.",
+    "- No preamble, no restating the criteria, no closing summary, no invented contact details, and never a contact route other than the profile link you were given.",
+    "",
+    "Hold the rest back. Each person also carries their evidence sources, mobility evidence, and what remains unverified. Do not print those unless the recruiter asks about someone in particular — then give that person's full record, keeping confirmed facts, indicators and unknowns clearly apart. Close the list with one short line telling them they can ask for the detail on anyone.",
     "",
     "When the results carry near_misses instead of profiles, nobody met every criterion. Say in one line which criterion none of them could be confirmed against, then list the near misses the same way under a heading that makes their status obvious, and end with one line naming the criterion worth relaxing. Never present a near miss as if it were a full match.",
     "When both lists are empty, say so in one line and suggest which criterion to relax.",

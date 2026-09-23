@@ -8,7 +8,7 @@ type Props = {
   enabled: boolean;
   setEnabled: (v: boolean) => void;
   cfg: AgentConfig;
-  set: (k: keyof AgentConfig, v: string | number) => void;
+  set: (k: keyof AgentConfig, v: string | number | string[]) => void;
 };
 
 // Workflow 1: the user pastes a job description and we surface the HR

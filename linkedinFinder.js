@@ -8,7 +8,7 @@
 // the seam where a real scraper or profile API would slot in later.
 
 import { outputText, addUsage, parseJson } from "./agent.js";
-import { LINKEDIN_FINDER_DEFAULTS as DEFAULTS } from "./agentPrompts.js";
+import { LINKEDIN_FINDER_DEFAULTS as DEFAULTS, FINDER_ROUTES } from "./agentPrompts.js";
 
 // linkedin.com/in/<slug> — anything else (company pages, job posts, search
 // result pages, other domains) is not a person and gets dropped.
@@ -36,28 +36,67 @@ function buildQuery(jobTitle, location, keyFactors) {
   return parts.join(" ");
 }
 
-// Dedupe + shape the raw search hits. Today this only reshapes what the search
-// already returned; a scraper would fill `evidence` with fetched page text.
-function enrich(candidates, limit) {
-  const seen = new Set();
+const str = (v) => String(v ?? "").trim();
+
+// Interleave the routes' hits before capping, so a cheap route that returns
+// plenty cannot crowd out the one that found the person actually saying they
+// are free.
+function interleave(perRoute) {
   const out = [];
-  for (const cand of candidates) {
-    const url = normalizeUrl(cand?.linkedin_url);
-    if (!url || seen.has(url)) continue;
-    seen.add(url);
-    out.push({
-      name: String(cand?.name ?? "").trim(),
-      headline: String(cand?.headline ?? "").trim(),
-      title: String(cand?.title ?? "").trim(),
-      company: String(cand?.company ?? "").trim(),
-      location: String(cand?.location ?? "").trim(),
-      linkedin_url: url,
-      evidence: String(cand?.snippet ?? cand?.headline ?? "").trim(),
-      availability_signal: String(cand?.availability_signal ?? "").trim(),
-    });
-    if (out.length >= limit) break;
+  for (let i = 0; perRoute.some((list) => i < list.length); i++) {
+    for (const list of perRoute) if (i < list.length) out.push(list[i]);
   }
   return out;
+}
+
+// Merge the routes' hits into one record per person, keyed on the normalised
+// profile URL. The same person found twice is not a duplicate to discard: the
+// second sighting is more evidence, so the sources, signals and snippets
+// accumulate rather than overwrite.
+function enrich(perRoute, limit) {
+  const byUrl = new Map();
+  for (const cand of interleave(perRoute)) {
+    const url = normalizeUrl(cand?.linkedin_url);
+    if (!url) continue;
+
+    const existing = byUrl.get(url);
+    if (!existing) {
+      if (byUrl.size >= limit) continue;
+      byUrl.set(url, {
+        name: str(cand?.name),
+        headline: str(cand?.headline),
+        title: str(cand?.title),
+        company: str(cand?.company),
+        location: str(cand?.location),
+        linkedin_url: url,
+        evidence: [str(cand?.snippet) || str(cand?.headline)].filter(Boolean),
+        evidence_sources: [str(cand?.evidence_source)].filter(Boolean),
+        discovery_routes: [str(cand?.discovery_route)].filter(Boolean),
+        availability_signal: str(cand?.availability_signal),
+        signal_date: str(cand?.signal_date),
+        mobility_evidence: str(cand?.mobility_evidence),
+      });
+      continue;
+    }
+
+    // Fill the blanks the first sighting left, and keep every distinct signal.
+    for (const k of ["name", "headline", "title", "company", "location", "mobility_evidence"]) {
+      if (!existing[k]) existing[k] = str(cand?.[k === "mobility_evidence" ? "mobility_evidence" : k]);
+    }
+    for (const [k, v] of [
+      ["evidence", str(cand?.snippet) || str(cand?.headline)],
+      ["evidence_sources", str(cand?.evidence_source)],
+      ["discovery_routes", str(cand?.discovery_route)],
+    ]) {
+      if (v && !existing[k].includes(v)) existing[k].push(v);
+    }
+    // A dated signal beats an undated one; otherwise the first stands.
+    if (str(cand?.availability_signal) && (!existing.availability_signal || (!existing.signal_date && str(cand?.signal_date)))) {
+      existing.availability_signal = str(cand?.availability_signal);
+      existing.signal_date = str(cand?.signal_date);
+    }
+  }
+  return [...byUrl.values()];
 }
 
 export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gpt-4o") {
@@ -90,29 +129,53 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
   // carried through verification, and shown to the user.
   const maxResults = Math.max(1, Math.min(50, Number(c.finder_max_results) || 8));
   const minConfidence = Math.max(0, Math.min(1, Number(c.finder_min_confidence) ?? 0.5));
+  // How recent an availability signal has to be before anyone is called free.
+  const signalMaxAgeDays = Math.max(1, Number(c.finder_signal_max_age_days) || 90);
   const query = buildQuery(jobTitle, location, keyFactors);
   const criteria = { job_title: jobTitle, location, key_factors: keyFactors };
 
-  // 2) Web search, restricted to LinkedIn profile URLs.
-  const searchResp = await openai.responses.create({
-    model,
-    instructions: c.finder_search_instructions,
-    tools: [{ type: "web_search" }],
-    input:
-      `Find up to ${maxResults} real LinkedIn member profiles (linkedin.com/in/) matching these criteria.\n` +
-      `Job title: ${jobTitle}\n` +
-      `Location: ${location}\n` +
-      (keyFactors.length ? `Other key factors: ${keyFactors.join(", ")}\n` : "") +
-      `Common extra factors to watch for: ${c.finder_extra_factor_hints}\n\n` +
-      `Run this query (and sensible variations of it):\n${query}\n\n` +
-      `Return ONLY JSON: {"candidates":[{"name":string,"headline":string,"title":string,"company":string,"location":string,"linkedin_url":string,"snippet":string,"availability_signal":string}]}`,
-  });
-  addUsage(usage, searchResp);
-  const searchOut = parseJson(outputText(searchResp), { candidates: [] });
-  const rawCandidates = Array.isArray(searchOut.candidates) ? searchOut.candidates : [];
+  // 2) One search pass per enabled discovery route. The same person reached
+  // from two directions is two pieces of evidence, and the strongest one — a
+  // post saying they are free — is rarely on the profile itself. Run them
+  // together so the extra routes cost tokens, not wall-clock time.
+  const enabledKeys = Array.isArray(c.finder_routes) && c.finder_routes.length
+    ? c.finder_routes
+    : DEFAULTS.finder_routes;
+  const routes = FINDER_ROUTES.filter((r) => enabledKeys.includes(r.key));
+  const activeRoutes = routes.length ? routes : FINDER_ROUTES.filter((r) => r.default);
 
-  // 3) Enrich: dedupe, drop non-profile URLs, keep the snippet as evidence.
-  const candidates = enrich(rawCandidates, maxResults);
+  const criteriaBlock =
+    `Job title: ${jobTitle}\n` +
+    `Location: ${location}\n` +
+    (keyFactors.length ? `Other key factors: ${keyFactors.join(", ")}\n` : "") +
+    `Common extra factors to watch for: ${c.finder_extra_factor_hints}\n`;
+
+  const searchResps = await Promise.all(
+    activeRoutes.map((route) =>
+      openai.responses.create({
+        model,
+        instructions: c.finder_search_instructions,
+        tools: [{ type: "web_search" }],
+        input:
+          `Discovery route for this pass — ${route.label}:\n${route.focus}\n\n` +
+          `Find up to ${maxResults} people matching these criteria.\n` +
+          criteriaBlock +
+          `\nStarting query (vary it as your instructions say):\n${query}\n\n` +
+          `Set discovery_route to "${route.key}" on every person you return.\n` +
+          `Return ONLY JSON: {"candidates":[{"name":string,"headline":string,"title":string,"company":string,"location":string,"linkedin_url":string,"snippet":string,"availability_signal":string,"signal_date":string,"mobility_evidence":string,"evidence_source":string,"discovery_route":string}]}`,
+      }).then((resp) => {
+        addUsage(usage, resp);
+        const out = parseJson(outputText(resp), { candidates: [] });
+        const list = Array.isArray(out.candidates) ? out.candidates : [];
+        // Trust the route we asked for over the one the model echoed back.
+        return list.map((cand) => ({ ...cand, discovery_route: route.key }));
+      })
+    )
+  );
+  const rawCandidates = searchResps.flat();
+
+  // 3) Merge the routes into one record per person.
+  const candidates = enrich(searchResps, maxResults);
   if (!candidates.length) {
     return {
       result: {
@@ -137,9 +200,10 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
       `- job title: ${jobTitle}\n` +
       `- location: ${location}\n` +
       keyFactors.map((f) => `- ${f}`).join("\n") +
-      `\n\nCandidates (evidence is the search snippet for that profile):\n` +
+      `\n\nAn availability signal counts as current only if dated within the last ${signalMaxAgeDays} days. Today is ${new Date().toISOString().slice(0, 10)}.\n` +
+      `\nCandidates (evidence is what the search actually showed; evidence_sources says where each piece came from):\n` +
       JSON.stringify(candidates, null, 1) +
-      `\n\nFor every candidate, return ONLY JSON: {"results":[{"linkedin_url":string,"verified":boolean,"matched_factors":string[],"missing_factors":string[],"confidence":number,"reason":string}]}`,
+      `\n\nFor every candidate, return ONLY JSON: {"results":[{"linkedin_url":string,"verified":boolean,"matched_factors":string[],"missing_factors":string[],"unverified":string[],"availability_current":boolean,"confidence":number,"reason":string}]}`,
   });
   addUsage(usage, verifyResp);
   const verifyOut = parseJson(outputText(verifyResp), { results: [] });
@@ -169,6 +233,15 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
       linkedin_url: cand.linkedin_url,
       matched_factors: Array.isArray(v?.matched_factors) ? v.matched_factors : [],
       confidence,
+      // The evidence trail. The presentation prompt keeps this out of the list
+      // and prints it only when the recruiter asks about one person.
+      availability_signal: cand.availability_signal,
+      signal_date: cand.signal_date,
+      availability_current: Boolean(v?.availability_current),
+      mobility_evidence: cand.mobility_evidence,
+      evidence_sources: cand.evidence_sources,
+      discovery_routes: cand.discovery_routes,
+      unverified: Array.isArray(v?.unverified) ? v.unverified : [],
     };
     if (v?.verified && confidence >= minConfidence) {
       if (profiles.length < maxResults) profiles.push(shaped);
@@ -178,7 +251,6 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
       nearMisses.push({
         ...shaped,
         unconfirmed_factors: Array.isArray(v?.missing_factors) ? v.missing_factors : [],
-        availability_signal: cand.availability_signal,
       });
     }
   }
@@ -191,6 +263,8 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
       // Only offered as a fallback, so a run that found real matches never
       // dilutes them with unverified ones.
       near_misses: profiles.length ? [] : nearMisses,
+      routes: activeRoutes.map((r) => r.key),
+      signal_max_age_days: signalMaxAgeDays,
       checked_count: candidates.length,
       dropped_count: candidates.length - profiles.length,
       presentation: c.finder_compress_instructions,

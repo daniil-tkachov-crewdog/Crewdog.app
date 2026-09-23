@@ -12,6 +12,8 @@ export type AgentConfig = {
   search_instructions?: string;
   finder_max_results?: number;
   finder_min_confidence?: number;
+  finder_routes?: string[];
+  finder_signal_max_age_days?: number;
   finder_search_instructions?: string;
   finder_verify_instructions?: string;
   finder_compress_instructions?: string;
