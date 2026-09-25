@@ -4,20 +4,23 @@ import { getSettings, saveSettings, type AgentConfig } from "@/services/settings
 import { toast } from "sonner";
 import JobDescriptionTab from "./agent/JobDescriptionTab";
 import LinkedinFinderTab from "./agent/LinkedinFinderTab";
+import JobFinderTab from "./agent/JobFinderTab";
 
 const WORKFLOWS = [
   { key: "jd", label: "Job description" },
   { key: "finder", label: "LinkedIn finder" },
+  { key: "jobfinder", label: "Job finder" },
 ] as const;
 
 type WorkflowKey = (typeof WORKFLOWS)[number]["key"];
 
-// Shell for the two agent workflows. Both live in the same app_settings row, so
+// Shell for the agent workflows. They all live in the same app_settings row, so
 // settings load once here and a single Save persists whichever sub-tab was edited.
 const AgentTab = () => {
   const [workflow, setWorkflow] = useState<WorkflowKey>("jd");
   const [enabled, setEnabled] = useState(false);
   const [finderEnabled, setFinderEnabled] = useState(false);
+  const [jobFinderEnabled, setJobFinderEnabled] = useState(false);
   const [cfg, setCfg] = useState<AgentConfig>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -27,12 +30,13 @@ const AgentTab = () => {
       const s = await getSettings();
       setEnabled(s.agent_enabled);
       setFinderEnabled(s.linkedin_finder_enabled);
+      setJobFinderEnabled(s.job_finder_enabled);
       setCfg(s.agent_config ?? {});
       setLoading(false);
     })();
   }, []);
 
-  const set = (k: keyof AgentConfig, v: string | number | string[]) =>
+  const set = (k: keyof AgentConfig, v: string | number | boolean | string[]) =>
     setCfg((c) => ({ ...c, [k]: v }));
 
   const save = async () => {
@@ -41,6 +45,7 @@ const AgentTab = () => {
       await saveSettings({
         agent_enabled: enabled,
         linkedin_finder_enabled: finderEnabled,
+        job_finder_enabled: jobFinderEnabled,
         agent_config: cfg,
       });
       toast.success("AI Agent settings saved");
@@ -71,12 +76,21 @@ const AgentTab = () => {
         ))}
       </div>
 
-      {workflow === "jd" ? (
+      {workflow === "jd" && (
         <JobDescriptionTab enabled={enabled} setEnabled={setEnabled} cfg={cfg} set={set} />
-      ) : (
+      )}
+      {workflow === "finder" && (
         <LinkedinFinderTab
           enabled={finderEnabled}
           setEnabled={setFinderEnabled}
+          cfg={cfg}
+          set={set}
+        />
+      )}
+      {workflow === "jobfinder" && (
+        <JobFinderTab
+          enabled={jobFinderEnabled}
+          setEnabled={setJobFinderEnabled}
           cfg={cfg}
           set={set}
         />

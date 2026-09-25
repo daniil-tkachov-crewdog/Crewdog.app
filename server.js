@@ -8,12 +8,14 @@ import OpenAI from "openai";
 import { PDFParse } from "pdf-parse";
 import { runJobSearch } from "./agent.js";
 import { runLinkedinFinder } from "./linkedinFinder.js";
+import { runJobFinder } from "./jobFinder.js";
 
 // Function tools the chat model can call, by name. Each takes
 // (openai, args, config, model) and resolves to { result, usage }.
 const AGENT_HANDLERS = {
   find_linkedin_connections: runJobSearch,
   find_linkedin_professionals: runLinkedinFinder,
+  find_jobs: runJobFinder,
 };
 
 // A log-sized record of one workflow run: the criteria the model chose and how
@@ -21,7 +23,16 @@ const AGENT_HANDLERS = {
 // for diagnosing the pipeline, not for storing anyone's profile.
 function summarizeAgentCall(name, args, result) {
   const row = { tool: name };
-  if (name === "find_linkedin_professionals") {
+  if (name === "find_jobs") {
+    row.query = String(args?.query ?? "").slice(0, 120);
+    row.location = String(args?.location ?? "").slice(0, 120);
+    row.key_factors = (Array.isArray(args?.key_factors) ? args.key_factors : [])
+      .map((f) => String(f ?? "").slice(0, 80))
+      .slice(0, 8);
+    row.include_agencies = Boolean(result?.include_agencies);
+    row.found = result?.found_count ?? 0;
+    row.returned = result?.jobs?.length ?? 0;
+  } else if (name === "find_linkedin_professionals") {
     row.job_title = String(args?.job_title ?? "").slice(0, 120);
     row.location = String(args?.location ?? "").slice(0, 120);
     row.key_factors = (Array.isArray(args?.key_factors) ? args.key_factors : [])
@@ -250,8 +261,9 @@ app.post("/api/chat", async (req, res) => {
     const activeModel = model || DEFAULT_MODEL;
     const agentEnabled = !!agent?.enabled;
     const finderEnabled = !!agent?.linkedin_finder_enabled;
+    const jobFinderEnabled = !!agent?.job_finder_enabled;
     loggedModel = activeModel;
-    loggedAgent = agentEnabled || finderEnabled;
+    loggedAgent = agentEnabled || finderEnabled || jobFinderEnabled;
 
     const tools = [];
     if (webSearch) tools.push({ type: "web_search" });
@@ -300,6 +312,37 @@ app.post("/api/chat", async (req, res) => {
             },
           },
           required: ["job_title", "location", "key_factors"],
+          additionalProperties: false,
+        },
+      });
+    }
+    if (jobFinderEnabled) {
+      tools.push({
+        type: "function",
+        name: "find_jobs",
+        description:
+          "Search the web for currently open data centre job vacancies and return them with title, location, salary and a link to the advert. Call this whenever the user is looking for work FOR THEMSELVES — 'find me a job', 'any data centre jobs in Dublin?', 'what critical facilities roles are open?', 'I'm a shift technician looking for something new'. This is the opposite of the other two tools: find_linkedin_connections and find_linkedin_professionals find PEOPLE, this one finds VACANCIES. The scope is the data centre industry in any form (colocation, hyperscale, critical facilities, MEP, commissioning, cooling, power, DCIM, construction and fit-out, NOC and security, DC sales and design); if the user asks for work outside that sector, tell them Crewdog covers data centres rather than calling this tool. Only query is required — put the kind of role they want in it, and call the tool without a location when they have not named one instead of guessing a city.",
+        parameters: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description:
+                "What the user is looking for, in their terms, e.g. 'data centre shift technician' or 'mission critical commissioning manager'. Required.",
+            },
+            location: {
+              type: "string",
+              description:
+                "The city, region or country they want to work in, e.g. 'Dublin'. Empty string when they did not say — do not guess one.",
+            },
+            key_factors: {
+              type: "array",
+              items: { type: "string" },
+              description:
+                "Any further requirements they gave, one per entry, e.g. ['contract', 'nights', 'HV authorised', 'remote']. Empty when they gave none.",
+            },
+          },
+          required: ["query", "location", "key_factors"],
           additionalProperties: false,
         },
       });
