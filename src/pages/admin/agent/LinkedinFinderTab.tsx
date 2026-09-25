@@ -29,10 +29,11 @@ const LinkedinFinderTab = ({ enabled, setEnabled, cfg, set }: Props) => {
     </div>
     <p className="text-xs text-muted-foreground">
       When on, asking the chatbot to find professionals without a job description triggers the
-      pipeline: job title + location (+ any key factors the user adds) → LinkedIn-domain web
-      search → dedupe → an AI pass that verifies each profile against every key factor → a
-      compact list of profile links. The chatbot asks for the title or location when either is
-      missing rather than guessing.
+      pipeline: job title + location (+ any key factors the user adds) → a web search per
+      discovery route → merge per person → an AI pass that verifies each profile against every
+      key factor → a compact list of profile links. Availability never filters the list: people
+      advertising that they are free are listed first and highlighted, ordinary matches follow.
+      The chatbot asks for the title or location when either is missing rather than guessing.
     </p>
 
     <section className="space-y-3">
@@ -76,6 +77,17 @@ const LinkedinFinderTab = ({ enabled, setEnabled, cfg, set }: Props) => {
       </section>
 
       <section className="space-y-2 max-w-[10rem]">
+        <label className="text-sm font-medium">Available slots</label>
+        <Input
+          type="number"
+          min={0}
+          max={50}
+          value={cfg.finder_available_slots ?? D.finder_available_slots}
+          onChange={(e) => set("finder_available_slots", Number(e.target.value))}
+        />
+      </section>
+
+      <section className="space-y-2 max-w-[10rem]">
         <label className="text-sm font-medium">Min confidence</label>
         <Input
           type="number"
@@ -101,9 +113,11 @@ const LinkedinFinderTab = ({ enabled, setEnabled, cfg, set }: Props) => {
     <p className="text-xs text-muted-foreground -mt-4">
       Max links caps the whole pipeline — how many profile links are searched for, run through
       verification, and shown to the user. Raising it costs proportionally more tokens per
-      search. Profiles the verification step scores below the minimum confidence are dropped, so
-      a run can return fewer links than the cap. An availability signal older than the max age
-      never counts as available now.
+      search. Available slots is how many of those seats are held for people advertising that
+      they are free; they are listed first and highlighted, and any seat they do not fill goes
+      back to the ordinary matches, so the list is never shorter for want of available people.
+      An availability signal older than the max age never counts as available now, and profiles
+      scored below the minimum confidence are dropped.
     </p>
 
     <section className="space-y-2">

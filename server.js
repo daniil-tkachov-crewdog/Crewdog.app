@@ -29,7 +29,8 @@ function summarizeAgentCall(name, args, result) {
       .slice(0, 8);
     row.routes = Array.isArray(result?.routes) ? result.routes : [];
     row.checked = result?.checked_count ?? 0;
-    row.returned = result?.profiles?.length ?? 0;
+    row.returned = (result?.available?.length ?? 0) + (result?.others?.length ?? 0);
+    row.available = result?.available?.length ?? 0;
     row.near_misses = result?.near_misses?.length ?? 0;
   } else {
     row.had_job_description = Boolean(String(args?.job_description ?? "").trim());
@@ -279,7 +280,7 @@ app.post("/api/chat", async (req, res) => {
         type: "function",
         name: "find_linkedin_professionals",
         description:
-          "Search LinkedIn for professionals matching a job title and location, verify each match, and return their profile links. Call this whenever the user asks to find people/professionals/candidates WITHOUT pasting a job description (e.g. 'find me senior nurses in Manchester'). Both job_title and location are required: if the user has not given one of them, ask them for it in your reply instead of calling this tool with a guess. Put EVERY further qualifier the user mentioned into key_factors — availability ('available to work', 'open to work', 'actively looking', 'free to start'), company, seniority, industry, skills, certifications, language, current vs past employer. Never drop a qualifier because it seems vague or hard to search for: the pipeline knows how to look for these and how to report the ones it could not confirm.",
+          "Search LinkedIn for professionals matching a job title and location, verify each match, and return their profile links. Call this whenever the user asks to find people/professionals/candidates WITHOUT pasting a job description (e.g. 'find me senior nurses in Manchester'). Both job_title and location are required: if the user has not given one of them, ask them for it in your reply instead of calling this tool with a guess. Put EVERY further qualifier the user mentioned into key_factors — availability ('available to work', 'open to work', 'actively looking', 'free to start'), company, seniority, industry, skills, certifications, language, current vs past employer. Never drop a qualifier because it seems vague or hard to search for: the pipeline knows how to look for these and how to report the ones it could not confirm. It always returns people who are advertising that they are available alongside ordinary matches, so asking for availability sorts and labels the list rather than narrowing it.",
         parameters: {
           type: "object",
           properties: {

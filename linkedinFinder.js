@@ -38,6 +38,15 @@ function buildQuery(jobTitle, location, keyFactors) {
 
 const str = (v) => String(v ?? "").trim();
 
+// "Available to work" is a different kind of criterion from "NDT" or "London":
+// it is a bonus the evidence may or may not show, never a reason to hide
+// someone who matches the actual job. Asked for, it sorts and labels the list;
+// it never filters it.
+const AVAILABILITY_FACTOR =
+  /\b(availab\w*|open to work|opentowork|looking for|seeking|free to start|between roles|immediately|on the market|actively looking)\b/i;
+
+const isAvailabilityFactor = (f) => AVAILABILITY_FACTOR.test(f);
+
 // Interleave the routes' hits before capping, so a cheap route that returns
 // plenty cannot crowd out the one that found the person actually saying they
 // are free.
@@ -111,6 +120,11 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
     .map((f) => String(f ?? "").trim())
     .filter(Boolean)
     .slice(0, 8);
+  // Availability is pulled out of the criteria the verifier gates on. Whether
+  // the recruiter asked for it or not, the list carries both kinds of person —
+  // asking for it only decides how loudly the available ones are announced.
+  const coreFactors = keyFactors.filter((f) => !isAvailabilityFactor(f));
+  const askedForAvailable = keyFactors.some(isAvailabilityFactor);
 
   // Title and location are the two the workflow cannot run without; the model is
   // told to ask the user for them, so reaching here means it guessed wrong.
@@ -131,8 +145,26 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
   const minConfidence = Math.max(0, Math.min(1, Number(c.finder_min_confidence) ?? 0.5));
   // How recent an availability signal has to be before anyone is called free.
   const signalMaxAgeDays = Math.max(1, Number(c.finder_signal_max_age_days) || 90);
-  const query = buildQuery(jobTitle, location, keyFactors);
-  const criteria = { job_title: jobTitle, location, key_factors: keyFactors };
+  // Seats held for people with a live availability signal. The rest of the list
+  // is ordinary matches, and unfilled availability seats are given back to them,
+  // so a search that finds nobody free still returns a full list of people who
+  // can do the job.
+  const availableSlots = Math.max(
+    0,
+    Math.min(maxResults, Number(c.finder_available_slots) || 0)
+  );
+  // Search wider than we show. Available people are a minority of any result
+  // set, so a pool the size of the list cannot reliably fill the seats held for
+  // them — the split would collapse to whatever the first few hits happened to
+  // be. The extra candidates cost search and verification tokens, not seats.
+  const searchPool = maxResults + availableSlots * 2;
+  const query = buildQuery(jobTitle, location, coreFactors);
+  const criteria = {
+    job_title: jobTitle,
+    location,
+    key_factors: coreFactors,
+    availability: askedForAvailable ? "requested" : "surfaced when found",
+  };
 
   // 2) One search pass per enabled discovery route. The same person reached
   // from two directions is two pieces of evidence, and the strongest one — a
@@ -158,7 +190,7 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
         tools: [{ type: "web_search" }],
         input:
           `Discovery route for this pass — ${route.label}:\n${route.focus}\n\n` +
-          `Find up to ${maxResults} people matching these criteria.\n` +
+          `Find up to ${searchPool} people matching these criteria.\n` +
           criteriaBlock +
           `\nStarting query (vary it as your instructions say):\n${query}\n\n` +
           `Set discovery_route to "${route.key}" on every person you return.\n` +
@@ -175,13 +207,14 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
   const rawCandidates = searchResps.flat();
 
   // 3) Merge the routes into one record per person.
-  const candidates = enrich(searchResps, maxResults);
+  const candidates = enrich(searchResps, searchPool);
   if (!candidates.length) {
     return {
       result: {
         query,
         criteria,
-        profiles: [],
+        available: [],
+        others: [],
         near_misses: [],
         checked_count: 0,
         dropped_count: rawCandidates.length,
@@ -191,7 +224,9 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
     };
   }
 
-  // 4) Verify each candidate against every key factor.
+  // 4) Verify each candidate. Title, location and the non-availability factors
+  // decide whether someone belongs on the list at all; availability is judged
+  // alongside, as a label rather than a gate.
   const verifyResp = await openai.responses.create({
     model,
     instructions: c.finder_verify_instructions,
@@ -199,7 +234,7 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
       `Criteria:\n` +
       `- job title: ${jobTitle}\n` +
       `- location: ${location}\n` +
-      keyFactors.map((f) => `- ${f}`).join("\n") +
+      coreFactors.map((f) => `- ${f}`).join("\n") +
       `\n\nAn availability signal counts as current only if dated within the last ${signalMaxAgeDays} days. Today is ${new Date().toISOString().slice(0, 10)}.\n` +
       `\nCandidates (evidence is what the search actually showed; evidence_sources says where each piece came from):\n` +
       JSON.stringify(candidates, null, 1) +
@@ -214,13 +249,11 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
     ])
   );
 
-  // 5) Compress: keep the ones that passed, drop the verifier's working notes.
-  // A factor like "available to work" is often simply absent from a search
-  // snippet, so a strict pass can legitimately clear the whole list. Rather than
-  // hand back nothing, keep the candidates that failed only on those unprovable
-  // factors as near misses — surfaced only when nothing passed outright, and
-  // labelled so the chat reply can never present them as confirmed matches.
-  const profiles = [];
+  // 5) Compress into two lists. Everyone who matches the job goes on the list;
+  // the ones with a live availability signal simply go first and get labelled.
+  // Near misses now only catch people who failed the job criteria themselves,
+  // and are still offered only when the list would otherwise be empty.
+  const matched = [];
   const nearMisses = [];
   for (const cand of candidates) {
     const v = verdicts.get(cand.linkedin_url);
@@ -244,7 +277,7 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
       unverified: Array.isArray(v?.unverified) ? v.unverified : [],
     };
     if (v?.verified && confidence >= minConfidence) {
-      if (profiles.length < maxResults) profiles.push(shaped);
+      matched.push(shaped);
       continue;
     }
     if (nearMisses.length < maxResults) {
@@ -255,18 +288,32 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
     }
   }
 
+  // Strongest evidence first within each group, then fill the availability
+  // seats. Whatever those seats do not use goes back to the ordinary matches,
+  // so the list is always as long as the results allow.
+  const byConfidence = (x, y) => y.confidence - x.confidence;
+  const availablePool = matched.filter((p) => p.availability_current).sort(byConfidence);
+  const otherPool = matched.filter((p) => !p.availability_current).sort(byConfidence);
+
+  const available = availablePool.slice(0, availableSlots);
+  const others = otherPool.slice(0, maxResults - available.length);
+  // Available people beyond their seats are better matches than the ordinary
+  // ones they would displace, so they take any room left at the bottom.
+  const overflow = availablePool.slice(available.length, available.length + (maxResults - available.length - others.length));
+
   return {
     result: {
       query,
       criteria,
-      profiles,
+      available: [...available, ...overflow],
+      others,
       // Only offered as a fallback, so a run that found real matches never
       // dilutes them with unverified ones.
-      near_misses: profiles.length ? [] : nearMisses,
+      near_misses: matched.length ? [] : nearMisses,
       routes: activeRoutes.map((r) => r.key),
       signal_max_age_days: signalMaxAgeDays,
       checked_count: candidates.length,
-      dropped_count: candidates.length - profiles.length,
+      dropped_count: candidates.length - matched.length,
       presentation: c.finder_compress_instructions,
     },
     usage,

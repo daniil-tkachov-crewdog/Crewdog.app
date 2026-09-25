@@ -48,7 +48,39 @@ function splitByRegex(
   return out;
 }
 
+// The LinkedIn finder marks the people it found a live availability signal for.
+// The marker opens the line and is stripped before rendering — the highlight is
+// the whole point of it, so it must never reach the reader as text.
+const AVAILABLE_MARK = /^\s*(?:[-*•]\s*|\d+[.)]\s*)?::available::\s*/i;
+
+const AVAILABLE_CLS =
+  "inline-block rounded-[10px] px-2.5 py-1 shadow-[0_1px_8px_-2px_rgba(139,92,246,0.55)] ring-1 ring-violet-400/25 dark:shadow-[0_1px_10px_-2px_rgba(167,139,250,0.5)] dark:ring-violet-300/25";
+
 export function renderRichText(text: string): React.ReactNode {
+  // Availability highlighting is per line, so it has to happen before the
+  // inline passes, which treat the message as one flat string.
+  if (AVAILABLE_MARK.test(text) || text.includes("::available::")) {
+    const lines = text.split("\n");
+    return lines.flatMap((line, i) => {
+      const nl = i < lines.length - 1 ? ["\n"] : [];
+      if (!AVAILABLE_MARK.test(line)) {
+        return [
+          <React.Fragment key={`l${i}`}>{renderInline(line)}</React.Fragment>,
+          ...nl,
+        ];
+      }
+      return [
+        <span key={`a${i}`} className={AVAILABLE_CLS}>
+          {renderInline(line.replace(AVAILABLE_MARK, ""))}
+        </span>,
+        ...nl,
+      ];
+    });
+  }
+  return renderInline(text);
+}
+
+function renderInline(text: string): React.ReactNode {
   // 1) markdown links (any href)
   let nodes: React.ReactNode[] = splitByRegex(text, MD_LINK, (m, k) => (
     <a
