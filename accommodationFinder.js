@@ -3,9 +3,12 @@
 // adverts -> dedupe and cap in JS -> a list of places with type, location,
 // price, availability and a link.
 //
-// Shaped like the job finder rather than the people finders: the listing page
-// is the evidence, so one search pass is the whole pipeline and everything
-// after it is cheap string work.
+// Shaped like the job finder rather than the people finders: one search pass is
+// the whole model side of the pipeline. What follows it is a pass over the live
+// pages (see linkCheck.js), because a web search reads an index and an index is
+// a snapshot — and a let-agreed room is exactly the page that sits still long
+// enough to be indexed well. Every surviving URL is fetched before the user
+// sees it, at no token cost.
 //
 // Unlike the job finder this one has two required criteria. A property search
 // without a location returns noise, and "a place in Dublin" without knowing
@@ -16,6 +19,7 @@
 
 import { outputText, addUsage, parseJson } from "./agent.js";
 import { ACCOMMODATION_FINDER_DEFAULTS as DEFAULTS } from "./agentPrompts.js";
+import { verifyLinks, parsePhrases, PROPERTY_EXPIRY_PHRASES } from "./linkCheck.js";
 
 const str = (v) => String(v ?? "").trim();
 
@@ -99,6 +103,10 @@ export async function runAccommodationFinder(openai, args = {}, cfg = {}, model 
   }
 
   const maxResults = Math.max(1, Math.min(50, Number(c.accom_max_results) || 8));
+  const verifyEnabled = c.accom_verify_links !== false;
+  // Verification drops listings, so the search has to bring back more than the
+  // list needs. A short list is the one outcome this change must not produce.
+  const overFetch = Math.min(40, maxResults * (verifyEnabled ? 3 : 2));
   const maxAgeDays = Math.max(1, Number(c.accom_max_age_days) || 30);
   const listingType = c.accom_listing_type === "buy" ? "buy" : "rent";
 
@@ -123,7 +131,7 @@ export async function runAccommodationFinder(openai, args = {}, cfg = {}, model 
     instructions,
     tools: [{ type: "web_search" }],
     input:
-      `Find up to ${maxResults * 2} currently available places to ${
+      `Find up to ${overFetch} currently available places to ${
         listingType === "buy" ? "buy" : "rent"
       }.\n` +
       criteriaBlock +
@@ -131,16 +139,16 @@ export async function runAccommodationFinder(openai, args = {}, cfg = {}, model 
       (requirements.length
         ? `The conditions above came from the user. Treat them as filters where the listing states enough to judge, and say in the note when you had to relax one to fill the list.\n`
         : `The user gave no conditions beyond the location and the kind of place, so return the best spread of what is actually available.\n`) +
-      `\nReturn ONLY JSON: {"places":[{"title":string,"place_type":string,"location":string,"price":string,"bedrooms":string,"available_from":string,"furnished":string,"bills_included":string,"listed_by":string,"source":string,"url":string,"matches":[string],"misses":[string]}],"note":string}\n` +
+      `\nReturn ONLY JSON: {"places":[{"title":string,"place_type":string,"location":string,"price":string,"bedrooms":string,"available_from":string,"furnished":string,"bills_included":string,"listed_by":string,"status_text":string,"source":string,"url":string,"matches":[string],"misses":[string]}],"note":string}\n` +
+      `status_text: the words the listing itself uses about its own status or date, quoted exactly as they appear ("Added yesterday", "Available now", "Reduced on 03/09"). Leave it empty if the page states nothing of the kind — do not paraphrase and do not supply your own wording.\n` +
       `matches and misses: which of the user's stated conditions this listing meets and which it does not, using their own words. Leave both empty when they gave no conditions.`,
   });
   addUsage(usage, searchResp);
   const out = parseJson(outputText(searchResp), { places: [], note: "" });
   const rawPlaces = Array.isArray(out.places) ? out.places : [];
 
-  // 4) Dedupe on the normalised listing URL and cap. A place without a usable
-  // link is not something the user can enquire about, so it is dropped rather
-  // than shown with no way in.
+  // 4) Dedupe on the normalised listing URL. No cap here: it falls after
+  // verification, or a pass that drops six of eight hands back two.
   const byUrl = new Map();
   for (const place of rawPlaces) {
     const url = normalizeUrl(place?.url);
@@ -156,14 +164,33 @@ export async function runAccommodationFinder(openai, args = {}, cfg = {}, model 
       furnished: str(place?.furnished),
       bills_included: str(place?.bills_included),
       listed_by: str(place?.listed_by),
+      status_text: str(place?.status_text),
       source: str(place?.source),
       url,
       matches: (Array.isArray(place?.matches) ? place.matches : []).map(str).filter(Boolean).slice(0, 10),
       misses: (Array.isArray(place?.misses) ? place.misses : []).map(str).filter(Boolean).slice(0, 10),
     });
-    if (byUrl.size >= maxResults) break;
+    if (byUrl.size >= overFetch) break;
   }
-  const places = [...byUrl.values()];
+  const candidates = [...byUrl.values()];
+
+  // 5) Follow every link. A 404, a "this property has been let" banner on an
+  // otherwise healthy 200, or a bounce to the portal's search page all mean the
+  // listing is gone. A 403 from a portal that blocks datacentre IPs means only
+  // that we were blocked, so those stay in, flagged.
+  let places = candidates;
+  let checkStats = null;
+  let droppedDead = [];
+  if (verifyEnabled) {
+    const { kept, dropped, stats } = await verifyLinks(candidates, {
+      phrases: parsePhrases(c.accom_expiry_phrases, PROPERTY_EXPIRY_PHRASES),
+      isDeadEndUrl: (u) => !isListingUrl(u),
+    });
+    places = kept;
+    checkStats = stats;
+    droppedDead = dropped;
+  }
+  places = places.slice(0, maxResults);
 
   return {
     result: {
@@ -179,6 +206,9 @@ export async function runAccommodationFinder(openai, args = {}, cfg = {}, model 
       places,
       found_count: rawPlaces.length,
       dropped_count: rawPlaces.length - places.length,
+      link_check: checkStats
+        ? { ...checkStats, dropped: droppedDead.slice(0, 10) }
+        : { skipped: true },
       note: str(out.note),
       // Handed back as tool output rather than as system instructions, the same
       // way workflows 2 and 3 do it, so the chat model formats the list.

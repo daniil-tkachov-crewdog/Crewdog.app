@@ -3,12 +3,17 @@
 // cap in JS -> a list of jobs with title, location, salary and link.
 //
 // Unlike workflows 1 and 2 this looks for vacancies rather than people, and it
-// is deliberately a single model call: the advert page itself is the evidence,
-// so there is nothing a second pass could verify that the search did not
-// already see. Everything after the search is cheap string work.
+// stays a single MODEL call: a second pass over the same search results has
+// nothing new to read. What it does have, since links started coming back
+// dead, is a pass over the live pages — see linkCheck.js. A web search reads an
+// index, and an index is a snapshot; expired adverts are the most thoroughly
+// indexed pages a job board has. So every surviving URL is fetched before the
+// candidate sees it, which costs no tokens and catches what the snapshot
+// cannot.
 
 import { outputText, addUsage, parseJson } from "./agent.js";
 import { JOB_FINDER_DEFAULTS as DEFAULTS } from "./agentPrompts.js";
+import { verifyLinks, parsePhrases, JOB_EXPIRY_PHRASES } from "./linkCheck.js";
 
 const str = (v) => String(v ?? "").trim();
 
@@ -79,6 +84,11 @@ export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o"
   }
 
   const maxResults = Math.max(1, Math.min(50, Number(c.jobfinder_max_results) || 8));
+  const verifyEnabled = c.jobfinder_verify_links !== false;
+  // Verification drops adverts, so the search has to bring back more than the
+  // list needs. Two-for-one was enough when nothing was ever dropped; it is not
+  // now, and a short list is the one outcome this change must not produce.
+  const overFetch = Math.min(40, maxResults * (verifyEnabled ? 3 : 2));
   const maxAgeDays = Math.max(1, Number(c.jobfinder_max_age_days) || 30);
   const includeAgencies = c.jobfinder_include_agencies !== false;
 
@@ -100,21 +110,21 @@ export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o"
     instructions,
     tools: [{ type: "web_search" }],
     input:
-      `Find up to ${maxResults * 2} currently open data centre vacancies.\n` +
+      `Find up to ${overFetch} currently open data centre vacancies.\n` +
       criteriaBlock +
       `\nToday is ${new Date().toISOString().slice(0, 10)}. Do not return an advert posted more than ${maxAgeDays} days ago, or one you cannot date and cannot confirm is still open.\n` +
       (includeAgencies
         ? `Recruitment agency adverts are allowed on this pass. Flag each one with is_agency true.\n`
         : `Recruitment agency adverts are NOT allowed on this pass. Return only the employer's own advert, and set is_agency false on every job.\n`) +
-      `\nReturn ONLY JSON: {"jobs":[{"title":string,"company":string,"location":string,"salary":string,"employment_type":string,"posted_date":string,"source":string,"url":string,"is_agency":boolean}],"note":string}`,
+      `\nReturn ONLY JSON: {"jobs":[{"title":string,"company":string,"location":string,"salary":string,"employment_type":string,"posted_date":string,"status_text":string,"source":string,"url":string,"is_agency":boolean}],"note":string}\n` +
+      `status_text: the words the advert itself uses about its own status or date, quoted exactly as they appear ("Posted 4 days ago", "Applications close 12 October", "Actively hiring"). Leave it empty if the page states nothing of the kind — do not paraphrase and do not supply your own wording.`,
   });
   addUsage(usage, searchResp);
   const out = parseJson(outputText(searchResp), { jobs: [], note: "" });
   const rawJobs = Array.isArray(out.jobs) ? out.jobs : [];
 
-  // 3) Dedupe on the normalised advert URL and cap. A job without a usable
-  // advert link is not something the candidate can apply to, so it is dropped
-  // rather than shown with no way in.
+  // 3) Dedupe on the normalised advert URL. No cap here any more: the cap now
+  // falls after verification, or a pass that drops six of eight hands back two.
   const byUrl = new Map();
   for (const job of rawJobs) {
     const url = normalizeUrl(job?.url);
@@ -131,13 +141,32 @@ export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o"
       salary: str(job?.salary),
       employment_type: str(job?.employment_type),
       posted_date: str(job?.posted_date),
+      status_text: str(job?.status_text),
       source: str(job?.source),
       url,
       is_agency: isAgency,
     });
-    if (byUrl.size >= maxResults) break;
+    if (byUrl.size >= overFetch) break;
   }
-  const jobs = [...byUrl.values()];
+  const candidates = [...byUrl.values()];
+
+  // 4) Follow every link. A 404, a "no longer accepting applications" banner on
+  // an otherwise healthy 200, or a bounce to the board's search page all mean
+  // the advert is gone. A 403 from a board that blocks datacentre IPs means
+  // only that we were blocked, so those stay in, flagged.
+  let jobs = candidates;
+  let checkStats = null;
+  let droppedDead = [];
+  if (verifyEnabled) {
+    const { kept, dropped, stats } = await verifyLinks(candidates, {
+      phrases: parsePhrases(c.jobfinder_expiry_phrases, JOB_EXPIRY_PHRASES),
+      isDeadEndUrl: (u) => !isAdvertUrl(u),
+    });
+    jobs = kept;
+    checkStats = stats;
+    droppedDead = dropped;
+  }
+  jobs = jobs.slice(0, maxResults);
 
   return {
     result: {
@@ -147,6 +176,9 @@ export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o"
       jobs,
       found_count: rawJobs.length,
       dropped_count: rawJobs.length - jobs.length,
+      link_check: checkStats
+        ? { ...checkStats, dropped: droppedDead.slice(0, 10) }
+        : { skipped: true },
       note: str(out.note),
       // Handed back as tool output rather than as system instructions, the same
       // way workflow 2 does it, so the chat model formats the list.

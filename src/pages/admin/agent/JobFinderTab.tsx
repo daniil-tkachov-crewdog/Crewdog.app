@@ -16,6 +16,7 @@ type Props = {
 // the chatbot prints title / location / salary / link for each.
 const JobFinderTab = ({ enabled, setEnabled, cfg, set }: Props) => {
   const includeAgencies = cfg.jobfinder_include_agencies ?? D.jobfinder_include_agencies;
+  const verifyLinks = cfg.jobfinder_verify_links ?? D.jobfinder_verify_links;
   // Only one of the two search prompts runs, but both stay editable — the one
   // that is off today still needs tuning for tomorrow.
   const liveNote = (isLive: boolean) =>
@@ -85,6 +86,39 @@ const JobFinderTab = ({ enabled, setEnabled, cfg, set }: Props) => {
         dead links can be dropped without shortening the list. An advert posted longer ago than
         the max age is skipped, as is one that cannot be dated and confirmed still open.
       </p>
+
+<section className="space-y-2">
+        <div className="flex items-center justify-between max-w-xs">
+          <span className="text-sm font-medium">Verify links before showing?</span>
+          <Switch
+            checked={verifyLinks}
+            onCheckedChange={(v) => set("jobfinder_verify_links", v)}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {verifyLinks
+            ? "On \u2014 every advert link is opened and read before the user sees it. A 404, a page whose text matches one of the phrases below, or a redirect to the site's own search page all mean the advert is gone, and it is dropped. A site that blocks us (403, rate limit, timeout) proves nothing either way, so those stay in the list and the reply says it could not confirm them. Costs no tokens and adds a few seconds."
+            : "Off \u2014 adverts are shown exactly as the search reported them. The search reads an index, and an index runs weeks behind: expect expired adverts and dead links."}
+        </p>
+      </section>
+
+      <section className="space-y-2">
+        <label className="text-sm font-medium">Expired-listing phrases</label>
+        <Textarea
+          value={cfg.jobfinder_expiry_phrases ?? D.jobfinder_expiry_phrases}
+          onChange={(e) => set("jobfinder_expiry_phrases", e.target.value)}
+          rows={10}
+          className="font-mono text-sm"
+          disabled={!verifyLinks}
+        />
+        <p className="text-xs text-muted-foreground">
+          One phrase per line, matched case-insensitively against the page's visible text. A dead advert
+          usually answers 200 rather than 404 \u2014 it keeps the URL and swaps the body for a notice \u2014
+          so this list is what actually catches it. Keep each phrase a sentence the page states about
+          itself: a bare status word can match a live page that happens to mention a
+          filled role elsewhere, and would drop a good listing.
+        </p>
+      </section>
 
       <section className="space-y-2">
         <label className="text-sm font-medium">

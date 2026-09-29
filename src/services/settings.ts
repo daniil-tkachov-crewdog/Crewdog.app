@@ -25,6 +25,8 @@ export type AgentConfig = {
   jobfinder_max_results?: number;
   jobfinder_max_age_days?: number;
   jobfinder_include_agencies?: boolean;
+  jobfinder_verify_links?: boolean;
+  jobfinder_expiry_phrases?: string;
   jobfinder_search_instructions_agencies?: string;
   jobfinder_search_instructions_direct?: string;
   jobfinder_compress_instructions?: string;
@@ -32,6 +34,8 @@ export type AgentConfig = {
   accom_max_results?: number;
   accom_max_age_days?: number;
   accom_listing_type?: "rent" | "buy";
+  accom_verify_links?: boolean;
+  accom_expiry_phrases?: string;
   accom_search_instructions_rent?: string;
   accom_search_instructions_buy?: string;
   accom_compress_instructions?: string;
