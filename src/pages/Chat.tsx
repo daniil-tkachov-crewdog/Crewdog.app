@@ -170,7 +170,7 @@ const CopyButton: React.FC<{
 const STARTER_PROMPTS = [
   "Who is the real data centre employer behind this job ad?",
   "Find the hiring manager for a data centre role I'm applying to",
-  "Write me a LinkedIn message to a data centre hiring manager",
+  "Find me a room to rent near the Slough data centres",
   "Find data centre technicians in London who are open to work right now",
 ];
 
