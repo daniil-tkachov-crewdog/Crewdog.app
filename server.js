@@ -9,6 +9,7 @@ import { PDFParse } from "pdf-parse";
 import { runJobSearch } from "./agent.js";
 import { runLinkedinFinder } from "./linkedinFinder.js";
 import { runJobFinder } from "./jobFinder.js";
+import { runAccommodationFinder } from "./accommodationFinder.js";
 
 // Function tools the chat model can call, by name. Each takes
 // (openai, args, config, model) and resolves to { result, usage }.
@@ -16,6 +17,7 @@ const AGENT_HANDLERS = {
   find_linkedin_connections: runJobSearch,
   find_linkedin_professionals: runLinkedinFinder,
   find_jobs: runJobFinder,
+  find_accommodation: runAccommodationFinder,
 };
 
 // A log-sized record of one workflow run: the criteria the model chose and how
@@ -23,7 +25,17 @@ const AGENT_HANDLERS = {
 // for diagnosing the pipeline, not for storing anyone's profile.
 function summarizeAgentCall(name, args, result) {
   const row = { tool: name };
-  if (name === "find_jobs") {
+  if (name === "find_accommodation") {
+    row.location = String(args?.location ?? "").slice(0, 120);
+    row.place_type = String(args?.place_type ?? "").slice(0, 80);
+    row.budget = String(args?.budget ?? "").slice(0, 80);
+    row.requirements = (Array.isArray(args?.requirements) ? args.requirements : [])
+      .map((f) => String(f ?? "").slice(0, 80))
+      .slice(0, 10);
+    row.listing_type = String(result?.listing_type ?? "");
+    row.found = result?.found_count ?? 0;
+    row.returned = result?.places?.length ?? 0;
+  } else if (name === "find_jobs") {
     row.query = String(args?.query ?? "").slice(0, 120);
     row.location = String(args?.location ?? "").slice(0, 120);
     row.key_factors = (Array.isArray(args?.key_factors) ? args.key_factors : [])
@@ -262,8 +274,9 @@ app.post("/api/chat", async (req, res) => {
     const agentEnabled = !!agent?.enabled;
     const finderEnabled = !!agent?.linkedin_finder_enabled;
     const jobFinderEnabled = !!agent?.job_finder_enabled;
+    const accomFinderEnabled = !!agent?.accommodation_finder_enabled;
     loggedModel = activeModel;
-    loggedAgent = agentEnabled || finderEnabled || jobFinderEnabled;
+    loggedAgent = agentEnabled || finderEnabled || jobFinderEnabled || accomFinderEnabled;
 
     const tools = [];
     if (webSearch) tools.push({ type: "web_search" });
@@ -343,6 +356,48 @@ app.post("/api/chat", async (req, res) => {
             },
           },
           required: ["query", "location", "key_factors"],
+          additionalProperties: false,
+        },
+      });
+    }
+
+    if (accomFinderEnabled) {
+      tools.push({
+        type: "function",
+        name: "find_accommodation",
+        description:
+          "Search the web for places to live that are available right now and return them with the kind of place, the area, the price and a link to the listing. Call this whenever the user wants somewhere to live \u2014 'find me a room in Slough', 'any flats near the Dublin data centres?', 'I'm relocating for this job, where can I stay?'. This tool needs TWO answers before it can run: the area they want to live in, and what kind of place they want (a room, a houseshare, a studio, a flat, a house). If the user has not given both, ASK for the missing one in your own words and do not call the tool yet \u2014 do not guess a city and do not assume they want a flat. Everything else is optional: a budget, a move-in date, bills included, furnished, parking, pets, a number of bedrooms, a commute. Pass anything they did volunteer, because the search will honour it, and never wait for a budget before searching. Not for finding people or jobs \u2014 use find_linkedin_professionals or find_jobs for those.",
+        parameters: {
+          type: "object",
+          properties: {
+            location: {
+              type: "string",
+              description:
+                "The town, city, area or neighbourhood they want to live in, e.g. 'Slough' or 'west Dublin'. Required \u2014 ask the user rather than sending an empty string or a guess.",
+            },
+            place_type: {
+              type: "string",
+              description:
+                "The kind of place they want, in their own words, e.g. 'room', 'houseshare', 'studio', 'flat', 'apartment', 'house'. Required \u2014 ask the user rather than sending an empty string or assuming one.",
+            },
+            budget: {
+              type: "string",
+              description:
+                "What they said about price, verbatim and with its currency and period, e.g. 'up to \u00a31,200 a month' or 'around \u20ac250 a week'. Empty string when they did not say \u2014 do not invent a figure and do not hold up the search for one.",
+            },
+            move_in_date: {
+              type: "string",
+              description:
+                "When they need it from, as they said it, e.g. '1 March' or 'ASAP'. Empty string when they did not say.",
+            },
+            requirements: {
+              type: "array",
+              items: { type: "string" },
+              description:
+                "Any other conditions they gave, one per entry, e.g. ['bills included', 'furnished', 'parking', 'pet friendly', '2 bedrooms', 'walking distance to the site']. Empty when they gave none.",
+            },
+          },
+          required: ["location", "place_type", "budget", "move_in_date", "requirements"],
           additionalProperties: false,
         },
       });

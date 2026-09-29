@@ -365,6 +365,7 @@ const Chat: React.FC = () => {
             enabled: settings.agent_enabled,
             linkedin_finder_enabled: settings.linkedin_finder_enabled,
             job_finder_enabled: settings.job_finder_enabled,
+            accommodation_finder_enabled: settings.accommodation_finder_enabled,
             config: settings.agent_config ?? {},
           },
         }),

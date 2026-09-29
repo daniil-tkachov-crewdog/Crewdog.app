@@ -5,11 +5,13 @@ import { toast } from "sonner";
 import JobDescriptionTab from "./agent/JobDescriptionTab";
 import LinkedinFinderTab from "./agent/LinkedinFinderTab";
 import JobFinderTab from "./agent/JobFinderTab";
+import AccommodationFinderTab from "./agent/AccommodationFinderTab";
 
 const WORKFLOWS = [
   { key: "jd", label: "Job description" },
   { key: "finder", label: "LinkedIn finder" },
   { key: "jobfinder", label: "Job finder" },
+  { key: "accommodation", label: "Accommodation Finder" },
 ] as const;
 
 type WorkflowKey = (typeof WORKFLOWS)[number]["key"];
@@ -21,6 +23,7 @@ const AgentTab = () => {
   const [enabled, setEnabled] = useState(false);
   const [finderEnabled, setFinderEnabled] = useState(false);
   const [jobFinderEnabled, setJobFinderEnabled] = useState(false);
+  const [accomFinderEnabled, setAccomFinderEnabled] = useState(false);
   const [cfg, setCfg] = useState<AgentConfig>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -31,6 +34,7 @@ const AgentTab = () => {
       setEnabled(s.agent_enabled);
       setFinderEnabled(s.linkedin_finder_enabled);
       setJobFinderEnabled(s.job_finder_enabled);
+      setAccomFinderEnabled(s.accommodation_finder_enabled);
       setCfg(s.agent_config ?? {});
       setLoading(false);
     })();
@@ -46,6 +50,7 @@ const AgentTab = () => {
         agent_enabled: enabled,
         linkedin_finder_enabled: finderEnabled,
         job_finder_enabled: jobFinderEnabled,
+        accommodation_finder_enabled: accomFinderEnabled,
         agent_config: cfg,
       });
       toast.success("AI Agent settings saved");
@@ -91,6 +96,14 @@ const AgentTab = () => {
         <JobFinderTab
           enabled={jobFinderEnabled}
           setEnabled={setJobFinderEnabled}
+          cfg={cfg}
+          set={set}
+        />
+      )}
+      {workflow === "accommodation" && (
+        <AccommodationFinderTab
+          enabled={accomFinderEnabled}
+          setEnabled={setAccomFinderEnabled}
           cfg={cfg}
           set={set}
         />

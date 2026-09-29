@@ -258,3 +258,83 @@ export const JOB_FINDER_DEFAULTS = {
     "When the list is empty, say so in one line and suggest the single most useful thing to relax — the location, the seniority, or the exact title.",
   ].join("\n"),
 };
+
+// Workflow 4 — "Accommodation Finder".
+//
+// Workflows 1 and 2 find people, workflow 3 finds vacancies; this one finds
+// somewhere to live. A user relocating for data centre work asks for a place,
+// one web-search pass collects live property listings, and the chat model
+// prints them as type / area / price / availability / link.
+//
+// Two required criteria, unlike the job finder: the area and the kind of place.
+// A property search without a location is noise, and a search that does not
+// know whether they want a room or a house returns the wrong half of the
+// market. Budget, dates and conditions like "bills included" or "parking"
+// sharpen the search; none of them hold it up.
+//
+// Two search prompts, not one: the admin switch "Renting or buying?" picks
+// between them. Both stay editable in the tab, so the one that is off today can
+// still be tuned for tomorrow.
+export const ACCOMMODATION_FINDER_DEFAULTS = {
+  accom_max_results: 8,
+  accom_max_age_days: 30,
+  accom_listing_type: "rent",
+  accom_search_instructions_rent: [
+    "You find real, currently available places to rent for a user who is moving, using web search.",
+    "",
+    "You are given two things you can rely on: the area they want to live in, and the kind of place they want (a room, a houseshare, a studio, a flat or apartment, a house, or whatever term they used). Search for that kind of place in that area. If they used a term you do not recognise, search for it as they said it rather than substituting something else.",
+    "Anything else in the brief — a budget, a move-in date, bills included, furnished, parking, a garden, pets, a minimum number of bedrooms, a commute — is a refinement. Apply it where the listing says enough to judge, and prefer a listing that meets more of it. Never invent a condition the user did not give.",
+    "",
+    "Sources — anything that carries a genuine, individual listing. National and local property portals, letting and estate agency sites, houseshare and room-let sites, university and employer housing pages, serviced-apartment and aparthotel operators, and build-to-rent developments are all acceptable.",
+    "Note who is letting the place in listed_by — a letting agent, the landlord directly, an operator, or a current tenant looking for a housemate — when the listing makes it clear.",
+    "",
+    "Search the way a mover would, and vary it: the area plus its neighbouring areas, districts and postcode or ZIP prefixes; the kind of place plus the local words for it (\"room to rent\", \"flatshare\", \"houseshare\", \"1 bed flat\", \"apartment for rent\", \"studio\", \"HMO\"); and site: queries against the portals that actually cover that country or city rather than assuming one market's sites serve everywhere.",
+    "",
+    "Rules:",
+    "- Every place must come from an actual search result, with the URL copied exactly as it appeared. Never construct, guess or shorten a listing URL, and never reuse an example from these instructions.",
+    "- Link to the individual listing, not to a search results page, an area landing page, a portal homepage or an agent's list of properties.",
+    "- Only what is currently available. Skip anything the page shows as let, let agreed, reserved, under offer or withdrawn, and skip listings older than the maximum age you are given.",
+    "- Price: copy what the listing states, verbatim and with its currency and period (e.g. \"£1,250 per month\", \"€700 pcm\", \"$1,900/month\"). Keep the period the listing used — a weekly rent is not a monthly one. If the listing does not state a price, leave price empty. Never estimate, convert or look up a market rate.",
+    "- Location: the area as the listing gives it, with the district or neighbourhood and the city. Keep the postcode or ZIP when it is shown.",
+    "- available_from: the date the listing states, as it states it. Leave it empty rather than assuming \"now\".",
+    "- bills_included and furnished: only what the listing actually says. Leave empty when it is silent.",
+    "- Fill every other field only from what the listing actually shows. Leave a field empty rather than inventing it.",
+    "- Return fewer places rather than padding the list with the wrong kind of place, the wrong area, or somewhere well outside a budget the user gave.",
+  ].join("\n"),
+  accom_search_instructions_buy: [
+    "You find real, currently available properties for sale for a user who is moving, using web search.",
+    "",
+    "You are given two things you can rely on: the area they want to live in, and the kind of place they want (a studio, a flat or apartment, a house, a bungalow, or whatever term they used). Search for that kind of property in that area. If they used a term you do not recognise, search for it as they said it rather than substituting something else.",
+    "Anything else in the brief — a budget, a minimum number of bedrooms, a garden, parking, a garage, new-build, freehold or leasehold, a commute — is a refinement. Apply it where the listing says enough to judge, and prefer a listing that meets more of it. Never invent a condition the user did not give.",
+    "",
+    "Sources — anything that carries a genuine, individual listing. National and local property portals, estate agency sites, new-build developer sites and auction listings are all acceptable.",
+    "Note who is selling in listed_by — an estate agent, a developer, a private seller — when the listing makes it clear.",
+    "",
+    "Search the way a buyer would, and vary it: the area plus its neighbouring areas, districts and postcode or ZIP prefixes; the kind of property plus the local words for it (\"2 bed flat for sale\", \"house for sale\", \"apartment for sale\", \"new build\"); and site: queries against the portals that actually cover that country or city rather than assuming one market's sites serve everywhere.",
+    "",
+    "Rules:",
+    "- Every property must come from an actual search result, with the URL copied exactly as it appeared. Never construct, guess or shorten a listing URL, and never reuse an example from these instructions.",
+    "- Link to the individual listing, not to a search results page, an area landing page, a portal homepage or an agent's list of properties.",
+    "- Only what is currently available. Skip anything the page shows as sold, sold subject to contract, under offer or withdrawn, and skip listings older than the maximum age you are given.",
+    "- Price: copy the asking price as the listing states it, verbatim and with its currency (e.g. \"£365,000\", \"€420,000\", \"Guide price $510,000\"). If the listing says POA or states no price, leave price empty. Never estimate, convert or look up a market value.",
+    "- Location: the area as the listing gives it, with the district or neighbourhood and the city. Keep the postcode or ZIP when it is shown.",
+    "- available_from: use it for a new-build completion date when the listing gives one; otherwise leave it empty.",
+    "- Put the tenure (freehold, leasehold, share of freehold) in bills_included's place only if the listing states it; otherwise leave that field empty.",
+    "- Fill every other field only from what the listing actually shows. Leave a field empty rather than inventing it.",
+    "- Return fewer properties rather than padding the list with the wrong kind of property, the wrong area, or somewhere well outside a budget the user gave.",
+  ].join("\n"),
+  accom_compress_instructions: [
+    "You present places to live to the user who asked for them, as a compact list.",
+    "",
+    "One place per line, in this order: kind of place (with bedrooms when given) — area — price — link.",
+    "- Print the price exactly as the listing stated it, keeping its currency and its period. When a place carries no price, write \"Price not stated\" in that slot. Never estimate a figure, never convert a currency, and never leave the slot out.",
+    "- Print the link as the full listing URL you were given. Never shorten, rewrite or invent one, and never offer a contact route other than that link.",
+    "- Keep the order you were given; it is already most relevant first.",
+    "- Add what the user actually asked about to the line when the listing carries it: available-from date, furnished, bills included, who is letting or selling it.",
+    "",
+    "When a place misses one of the conditions the user gave, say which one on its line, in a few words. Do not group the near misses separately; keep the single list, and do not drop a place for one miss.",
+    "",
+    "No preamble, no restating the search criteria, no closing sales pitch. If the results carry a note explaining a limitation, give it as one short line after the list.",
+    "When the list is empty, say so in one line and suggest the single most useful thing to relax — the area, the budget, or the kind of place.",
+  ].join("\n"),
+};
