@@ -47,35 +47,46 @@ function people(name, args, result) {
     };
   }
 
-  const shape = (p, available) => ({
+  // The three tiers the finder ranks people into, in the order they are read.
+  const shape = (p, tier) => ({
     name: str(p?.name),
     title: str(p?.title),
     company: str(p?.company),
     location: str(p?.location),
     url: str(p?.linkedin_url),
-    available,
-    signal: available ? str(p?.availability_signal) : "",
-    signal_source: available ? str(p?.evidence_sources?.[0]) : "",
-    signal_date: available ? str(p?.signal_date) : "",
+    tier,
+    available: tier === "available",
+    signal: tier === "available" ? str(p?.availability_signal) : "",
+    signal_source: tier === "available" ? str(p?.evidence_sources?.[0]) : "",
+    signal_date: tier === "available" ? str(p?.signal_date) : "",
     matched: list(p?.matched_factors),
+    unconfirmed: list(p?.unconfirmed_factors),
     confidence: Number(p?.confidence) || 0,
     routes: list(p?.discovery_routes),
   });
   const items = [
-    ...(result?.available ?? []).map((p) => shape(p, true)),
-    ...(result?.others ?? []).map((p) => shape(p, false)),
+    ...(result?.available ?? []).map((p) => shape(p, "available")),
+    ...(result?.others ?? []).map((p) => shape(p, "match")),
+    ...(result?.unconfirmed ?? []).map((p) => shape(p, "unconfirmed")),
   ].filter((p) => p.name && p.url);
-  const availableCount = items.filter((p) => p.available).length;
+  const count = (t) => items.filter((p) => p.tier === t).length;
   const checked = Number(result?.checked_count) || 0;
   return {
     kind: "people",
     items,
     summary: {
-      label: `Searched LinkedIn · ${checked} profiles checked · ${items.length} matched`,
+      label: `Searched LinkedIn · ${checked} profiles checked · ${items.length} shown`,
       steps: [
         ["Searched", [str(args?.job_title), str(args?.location), ...list(args?.key_factors)].filter(Boolean).join(", ")],
         list(result?.routes).length && ["Routes", list(result.routes).join(", ")],
-        ["Verified", `${items.length} match the criteria${availableCount ? `; ${availableCount} have a recent availability signal` : ""}`],
+        [
+          "Ranked",
+          [
+            count("available") && `${count("available")} with a recent availability signal`,
+            count("match") && `${count("match")} confirmed against the criteria`,
+            count("unconfirmed") && `${count("unconfirmed")} found but not confirmed`,
+          ].filter(Boolean).join("; ") || "nobody found",
+        ],
       ].filter(Boolean),
     },
   };

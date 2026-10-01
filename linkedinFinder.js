@@ -145,19 +145,11 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
   const minConfidence = Math.max(0, Math.min(1, Number(c.finder_min_confidence) ?? 0.5));
   // How recent an availability signal has to be before anyone is called free.
   const signalMaxAgeDays = Math.max(1, Number(c.finder_signal_max_age_days) || 90);
-  // Seats held for people with a live availability signal. The rest of the list
-  // is ordinary matches, and unfilled availability seats are given back to them,
-  // so a search that finds nobody free still returns a full list of people who
-  // can do the job.
-  const availableSlots = Math.max(
-    0,
-    Math.min(maxResults, Number(c.finder_available_slots) || 0)
-  );
-  // Search wider than we show. Available people are a minority of any result
-  // set, so a pool the size of the list cannot reliably fill the seats held for
-  // them — the split would collapse to whatever the first few hits happened to
-  // be. The extra candidates cost search and verification tokens, not seats.
-  const searchPool = maxResults + availableSlots * 2;
+  // How many people each route is asked to bring back. It is a search budget,
+  // not a cap on the answer: nobody the search finds is thrown away, because a
+  // recruiter would rather see a weak match than be told there is only one
+  // person in London.
+  const searchPool = maxResults;
   const query = buildQuery(jobTitle, location, coreFactors);
   const criteria = {
     job_title: jobTitle,
@@ -207,7 +199,8 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
   const rawCandidates = searchResps.flat();
 
   // 3) Merge the routes into one record per person.
-  const candidates = enrich(searchResps, searchPool);
+  // A safety ceiling, not a display limit — it only stops a runaway search.
+  const candidates = enrich(searchResps, Math.max(searchPool * 4, 100));
   if (!candidates.length) {
     return {
       result: {
@@ -215,9 +208,8 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
         criteria,
         available: [],
         others: [],
-        near_misses: [],
+        unconfirmed: [],
         checked_count: 0,
-        dropped_count: rawCandidates.length,
         presentation: c.finder_compress_instructions,
       },
       usage,
@@ -249,12 +241,12 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
     ])
   );
 
-  // 5) Compress into two lists. Everyone who matches the job goes on the list;
-  // the ones with a live availability signal simply go first and get labelled.
-  // Near misses now only catch people who failed the job criteria themselves,
-  // and are still offered only when the list would otherwise be empty.
+  // 5) Rank into three tiers. Everyone the search found is returned — a person
+  // the evidence could not confirm is still a lead, and discarding them is how
+  // a search over ten people came back showing one. Verification decides where
+  // someone sits, never whether they appear.
   const matched = [];
-  const nearMisses = [];
+  const unconfirmed = [];
   for (const cand of candidates) {
     const v = verdicts.get(cand.linkedin_url);
     const confidence = Number(v?.confidence ?? 0);
@@ -280,40 +272,30 @@ export async function runLinkedinFinder(openai, args = {}, cfg = {}, model = "gp
       matched.push(shaped);
       continue;
     }
-    if (nearMisses.length < maxResults) {
-      nearMisses.push({
-        ...shaped,
-        unconfirmed_factors: Array.isArray(v?.missing_factors) ? v.missing_factors : [],
-      });
-    }
+    unconfirmed.push({
+      ...shaped,
+      unconfirmed_factors: Array.isArray(v?.missing_factors) ? v.missing_factors : [],
+    });
   }
 
-  // Strongest evidence first within each group, then fill the availability
-  // seats. Whatever those seats do not use goes back to the ordinary matches,
-  // so the list is always as long as the results allow.
+  // Strongest evidence first inside each tier. The tiers themselves are the
+  // ranking the recruiter reads top to bottom: advertising they are free,
+  // then confirmed against the criteria, then found but unproven.
   const byConfidence = (x, y) => y.confidence - x.confidence;
-  const availablePool = matched.filter((p) => p.availability_current).sort(byConfidence);
-  const otherPool = matched.filter((p) => !p.availability_current).sort(byConfidence);
-
-  const available = availablePool.slice(0, availableSlots);
-  const others = otherPool.slice(0, maxResults - available.length);
-  // Available people beyond their seats are better matches than the ordinary
-  // ones they would displace, so they take any room left at the bottom.
-  const overflow = availablePool.slice(available.length, available.length + (maxResults - available.length - others.length));
+  const available = matched.filter((p) => p.availability_current).sort(byConfidence);
+  const others = matched.filter((p) => !p.availability_current).sort(byConfidence);
+  unconfirmed.sort(byConfidence);
 
   return {
     result: {
       query,
       criteria,
-      available: [...available, ...overflow],
+      available,
       others,
-      // Only offered as a fallback, so a run that found real matches never
-      // dilutes them with unverified ones.
-      near_misses: matched.length ? [] : nearMisses,
+      unconfirmed,
       routes: activeRoutes.map((r) => r.key),
       signal_max_age_days: signalMaxAgeDays,
       checked_count: candidates.length,
-      dropped_count: candidates.length - matched.length,
       presentation: c.finder_compress_instructions,
     },
     usage,

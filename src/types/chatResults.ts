@@ -14,11 +14,16 @@ export type PersonResult = {
   company: string;
   location: string;
   url: string;
+  // How strong the evidence is, in the order the list is ranked: advertising
+  // they are free, confirmed against the criteria, or found but unproven.
+  tier?: "available" | "match" | "unconfirmed";
   available?: boolean;
   signal?: string;
   signal_source?: string;
   signal_date?: string;
   matched?: string[];
+  // Criteria the evidence could not confirm (tier "unconfirmed").
+  unconfirmed?: string[];
   confidence?: number;
   routes?: string[];
   // Workflow 1 contacts: "HR" or "Connection".

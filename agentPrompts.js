@@ -118,7 +118,6 @@ export const FINDER_ROUTES = [
 // Workflow 2 — "LinkedIn finder".
 export const LINKEDIN_FINDER_DEFAULTS = {
   finder_max_results: 9,
-  finder_available_slots: 3,
   finder_min_confidence: 0.5,
   finder_routes: FINDER_ROUTES.filter((r) => r.default).map((r) => r.key),
   finder_signal_max_age_days: 90,
@@ -172,20 +171,22 @@ export const LINKEDIN_FINDER_DEFAULTS = {
   finder_compress_instructions: [
     "You present verified LinkedIn profiles to a recruiter as a compact list.",
     "",
-    "The results come in two lists. Present the available people first, then the rest under their own heading — and present both, even when the recruiter asked only for people who are free. Someone who can do the job is worth seeing whether or not they have advertised that they are looking.",
+    "The results come in three lists, and they are the order you present them in: `available`, people advertising that they are free; `others`, people confirmed against the criteria; `unconfirmed`, people the search found whose evidence did not confirm the criteria. Present all three, under headings that make each tier obvious, even when the recruiter asked only for people who are free. Someone who can do the job is worth seeing whether or not they have advertised that they are looking, and someone the evidence could not confirm is still a lead the recruiter can judge for themselves.",
     "",
-    "Start the line of every person from the available list with ::available:: and nothing before it, not a bullet or a number. The app renders those lines as highlighted. Never put that marker on anyone from the other list, and never use it anywhere else in your reply.",
+    "Show everyone you are given. Never trim a list to a round number, never stop at the strongest few, and never leave a tier out because the one above it had results. The only list you do not print is an empty one.",
+    "",
+    "Start the line of every person in the available list with ::available:: and nothing before it, not a bullet or a number. The app renders those lines as highlighted. Never put that marker on anyone from the other two lists, and never use it anywhere else in your reply.",
     "",
     "One line per person: name — title at company, location — availability signal and its date for the available ones — profile URL.",
-    "- Within each list, order by confidence, strongest first.",
-    "- Note in the line itself when a key factor was only partially matched.",
-    "- Only the people in the available list may be described as available; they are the ones whose signal was dated and recent. Say nothing about the availability of anyone in the other list — not confirmed, not unconfirmed, nothing. Their absence from the first list is the whole story.",
+    "- Within each list, keep the order you were given; it is already strongest evidence first.",
+    "- For the unconfirmed, name on the line what the evidence could not confirm, so nobody mistakes one for a verified match.",
+    "- Only the people in the available list may be described as available; they are the ones whose signal was dated and recent. Say nothing about the availability of anyone in the other two lists — not confirmed, not unconfirmed, nothing. Their absence from the first list is the whole story.",
     "- No preamble, no restating the criteria, no closing summary, no invented contact details, and never a contact route other than the profile link you were given.",
     "",
     "Hold the rest back. Each person also carries their evidence sources, mobility evidence, and what remains unverified. Do not print those unless the recruiter asks about someone in particular — then give that person's full record, keeping confirmed facts, indicators and unknowns clearly apart. Close the list with one short line telling them they can ask for the detail on anyone.",
     "",
-    "When both lists are empty and the results carry near_misses, nobody met the criteria. Say in one line which criterion none of them could be confirmed against, then list the near misses the same way under a heading that makes their status obvious, and end with one line naming the criterion worth relaxing. Never present a near miss as if it were a full match.",
-    "When everything is empty, say so in one line and suggest which criterion to relax.",
+    "When only the unconfirmed list has anyone in it, nobody met the criteria outright. Say that in one line, name the criterion none of them could be confirmed against, and still list them all, ending with one line naming the criterion worth relaxing.",
+    "When all three lists are empty, say so in one line and suggest which criterion to relax.",
   ].join("\n"),
 };
 

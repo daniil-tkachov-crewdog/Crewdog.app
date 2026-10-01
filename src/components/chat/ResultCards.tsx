@@ -217,6 +217,8 @@ const PersonRow: React.FC<{
       badge={
         p.available ? (
           <Pill tone="violet">Open to work</Pill>
+        ) : p.tier === "unconfirmed" ? (
+          <Pill tone="neutral">Unconfirmed</Pill>
         ) : p.tag ? (
           <Pill tone="neutral">{p.tag}</Pill>
         ) : null
@@ -234,6 +236,12 @@ const PersonRow: React.FC<{
               {joinDot(p.signal_source, p.signal_date)}
             </div>
           )}
+        </div>
+      )}
+      {p.tier === "unconfirmed" && !!p.unconfirmed?.length && (
+        <div className="rounded-[10px] bg-[rgba(26,25,23,0.04)] px-3 py-[10px] text-[13.5px] leading-[1.55] text-[#5F5D57] dark:bg-[rgba(255,255,255,0.05)] dark:text-[#A6A39C]">
+          Found in the search, but the evidence did not confirm{" "}
+          {p.unconfirmed.join(", ")}. Worth a look at the profile.
         </div>
       )}
       {(!!p.matched?.length || conf || !!p.routes?.length) && (
