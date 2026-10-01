@@ -6,6 +6,12 @@ import { useTheme } from "next-themes";
 import { Copy, Check, Paperclip, X, FileText, Square, Menu } from "lucide-react";
 import { Wordmark, ThemeToggle } from "@/components/layout/chrome";
 import { renderRichText } from "@/components/chat/richtext";
+import {
+  ResultGroupCard,
+  ToolSummary,
+  resultsToText,
+} from "@/components/chat/ResultCards";
+import { CARDS_MARKER, type ResultGroup } from "@/types/chatResults";
 import { extractCv, type AttachedCv } from "@/services/cv";
 import {
   listChats,
@@ -36,6 +42,46 @@ type Message = {
   // How long the reply took, in ms. Set on assistant messages produced in this
   // session; older messages loaded from the DB don't carry it.
   durationMs?: number;
+  // Workflow results rendered as cards where the reply's ::cards:: marker sits.
+  results?: ResultGroup[];
+};
+
+// The reply as plain text, with the cards written out where they sat. Used for
+// Copy and for the history sent back to the model, which never saw the list.
+const withCardsAsText = (m: Message) => {
+  if (!m.results?.length) return m.content.split(CARDS_MARKER).join("").trim();
+  const list = resultsToText(m.results);
+  const [before, ...after] = m.content.split(CARDS_MARKER);
+  return after.length
+    ? `${before.trim()}\n\n${list}\n\n${after.join("").trim()}`.trim()
+    : `${m.content.trim()}\n\n${list}`.trim();
+};
+
+const REPLY_TEXT_CLS =
+  "whitespace-pre-wrap text-[16px] leading-[1.75] text-[#25231F] [text-wrap:pretty] dark:text-[#DEDCD7]";
+
+// Claude-style answer: what was searched, a short intro, the result cards,
+// then the follow-up question.
+const AssistantBody: React.FC<{
+  message: Message;
+  onFollowUp: (prompt: string) => void;
+}> = ({ message, onFollowUp }) => {
+  const results = message.results ?? [];
+  const [before, ...rest] = message.content.split(CARDS_MARKER);
+  const intro = before.trim();
+  const outro = rest.join("").trim();
+  return (
+    <div className="flex w-full flex-col gap-4">
+      {results.map((g, i) => (
+        <ToolSummary key={`s${i}`} summary={g.summary} />
+      ))}
+      {intro && <div className={REPLY_TEXT_CLS}>{renderRichText(intro)}</div>}
+      {results.map((g, i) => (
+        <ResultGroupCard key={`g${i}`} group={g} onFollowUp={onFollowUp} />
+      ))}
+      {outro && <div className={REPLY_TEXT_CLS}>{renderRichText(outro)}</div>}
+    </div>
+  );
 };
 
 // "8s" / "1m 04s" — how long Crewdog took, short enough to sit next to Copy.
@@ -294,6 +340,7 @@ const Chat: React.FC = () => {
           id: m.id,
           role: m.role === "assistant" ? "assistant" : "user",
           content: m.content,
+          results: m.results?.length ? m.results : undefined,
         })),
       }));
     } catch (e) {
@@ -324,7 +371,10 @@ const Chat: React.FC = () => {
     const userMsg: Message = { id: uid(), role: "user", content: displayContent };
     // Full turn history to send to the model (prior messages + this one).
     const outgoing = [
-      ...active.messages.map((m) => ({ role: m.role, content: m.content })),
+      ...active.messages.map((m) => ({
+        role: m.role,
+        content: m.role === "assistant" ? withCardsAsText(m) : m.content,
+      })),
       { role: "user" as const, content: apiContent },
     ];
 
@@ -388,6 +438,9 @@ const Chat: React.FC = () => {
       if (!res.ok) throw new Error(`chat failed: ${res.status}`);
       const data = await res.json();
       const reply = String(data?.reply ?? "").trim() || "(no response)";
+      const results: ResultGroup[] = Array.isArray(data?.results)
+        ? data.results
+        : [];
       if (isAuthed && user && data?.usage) {
         void logTokenUsage(user.id, data?.model ?? settings.chat_model, data.usage);
       }
@@ -396,12 +449,13 @@ const Chat: React.FC = () => {
         role: "assistant",
         content: reply,
         durationMs: Date.now() - startedAt,
+        results: results.length ? results : undefined,
       };
       updateConversation(convId, (c) => ({
         ...c,
         messages: [...c.messages, botMsg],
       }));
-      if (isAuthed && user) void persistAssistantMessage(convId, reply);
+      if (isAuthed && user) void persistAssistantMessage(convId, reply, results);
       setUsageKey((k) => k + 1);
     } catch (e) {
       // A stopped turn is a deliberate user action, not a failure.
@@ -451,11 +505,15 @@ const Chat: React.FC = () => {
     }
   };
 
-  const persistAssistantMessage = async (convId: string, text: string) => {
+  const persistAssistantMessage = async (
+    convId: string,
+    text: string,
+    results: ResultGroup[]
+  ) => {
     if (!user) return;
     try {
       const dbId = await ensureChat(convId, "New chat");
-      await addMessage(user.id, dbId, "assistant", text);
+      await addMessage(user.id, dbId, "assistant", text, results);
     } catch (e) {
       console.error(e);
     }
@@ -705,7 +763,7 @@ const Chat: React.FC = () => {
           ref={scrollRef}
           className="flex-1 overflow-y-auto overscroll-contain"
         >
-          <div className="mx-auto w-full max-w-[720px] px-6 pb-6 pt-[10px]">
+          <div className="mx-auto w-full max-w-[740px] px-6 pb-6 pt-[10px]">
             {active.messages.length === 0 ? (
               <div className="mt-24 flex flex-col items-center text-center">
                 <Wordmark className="mb-6" />
@@ -742,11 +800,13 @@ const Chat: React.FC = () => {
                 )}
               </div>
             ) : (
-              <div className="flex flex-col gap-8">
+              <div className="flex flex-col gap-9">
                 {active.messages.map((m, i) => (
                   <div
                     key={m.id}
-                    className="chat-rise-in group flex flex-col gap-1"
+                    className={`chat-rise-in group flex flex-col ${
+                      m.role === "assistant" ? "gap-4" : "gap-1"
+                    }`}
                     style={{ animationDelay: `${Math.min(i * 80, 400)}ms` }}
                   >
                     <div
@@ -759,13 +819,11 @@ const Chat: React.FC = () => {
                           {renderRichText(m.content)}
                         </div>
                       ) : (
-                        <div className="w-full whitespace-pre-wrap text-[16px] leading-[1.75] text-[#25231F] [text-wrap:pretty] dark:text-[#DEDCD7]">
-                          {renderRichText(m.content)}
-                        </div>
+                        <AssistantBody message={m} onFollowUp={send} />
                       )}
                     </div>
                     <CopyButton
-                      text={m.content}
+                      text={m.role === "assistant" ? withCardsAsText(m) : m.content}
                       align={m.role === "user" ? "end" : "start"}
                       durationMs={m.durationMs}
                     />

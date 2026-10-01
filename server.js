@@ -10,6 +10,7 @@ import { runJobSearch } from "./agent.js";
 import { runLinkedinFinder } from "./linkedinFinder.js";
 import { runJobFinder } from "./jobFinder.js";
 import { runAccommodationFinder } from "./accommodationFinder.js";
+import { toCardGroup, CARDS_PRESENTATION } from "./chatResults.js";
 
 // Function tools the chat model can call, by name. Each takes
 // (openai, args, config, model) and resolves to { result, usage }.
@@ -213,6 +214,8 @@ app.post("/api/chat", async (req, res) => {
   // this a disappointing answer is unattributable: you cannot tell a criterion
   // the model silently dropped from one the search genuinely could not fill.
   const agentCalls = [];
+  // Workflow results the chat page renders as cards beside the reply text.
+  const results = [];
   const log = (status, error) =>
     recordChatCall(req, {
       model: loggedModel,
@@ -465,7 +468,10 @@ app.post("/api/chat", async (req, res) => {
           usage.total_tokens += pu.total_tokens;
           usage.requests += pu.requests ?? 0;
           agentCalls.push(summarizeAgentCall(call.name, args, result));
-          out = JSON.stringify(result);
+          // Shown as cards, the list must not be printed again in the text.
+          const group = toCardGroup(call.name, args, result);
+          if (group) results.push(group);
+          out = JSON.stringify(group ? { ...result, presentation: CARDS_PRESENTATION } : result);
         } catch (e) {
           agentCalls.push({ tool: call.name, error: String(e?.message || e).slice(0, 300) });
           out = JSON.stringify({ error: String(e?.message || e) });
@@ -493,6 +499,7 @@ app.post("/api/chat", async (req, res) => {
     log(200);
     res.json({
       reply: response.output_text ?? "",
+      results,
       model: activeModel,
       usage,
       limits: committed ?? undefined,

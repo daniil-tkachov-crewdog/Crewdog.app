@@ -154,8 +154,16 @@ All colors MUST be HSL.
     0% { opacity: 0; transform: translateY(3px); }
     100% { opacity: 1; transform: translateY(0); }
   }
+  /* Result cards and tool summaries unfolding */
+  .chat-unfold {
+    animation: chat-unfold 0.25s ease both;
+  }
+  @keyframes chat-unfold {
+    0% { opacity: 0; transform: translateY(6px); }
+    100% { opacity: 1; transform: none; }
+  }
   @media (prefers-reduced-motion: reduce) {
-    .chat-rise-in, .chat-dot, .chat-phrase { animation: none; }
+    .chat-rise-in, .chat-dot, .chat-phrase, .chat-unfold { animation: none; }
   }
 
   /* Radar run-page scanline (loading state) */
