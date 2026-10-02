@@ -420,6 +420,11 @@ const Chat: React.FC = () => {
     setLimitHit(null);
     try {
       const settings = await getSettings();
+      // Refresh the contact-lookup flag from the settings this turn already
+      // fetched. Reading it only on mount meant an admin switching it on was
+      // invisible to every tab opened beforehand — the cards in those tabs kept
+      // rendering without the buttons until a reload, with nothing to say why.
+      setLushaEnabled(settings.lusha_enabled);
       const token = await getAccessToken();
       const res = await fetch("/api/chat", {
         method: "POST",
