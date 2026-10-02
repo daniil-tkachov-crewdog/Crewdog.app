@@ -63,7 +63,7 @@ async function post(path, body) {
 
 // --- lookup ----------------------------------------------------------------
 
-// The reveal values the enrich endpoint accepts, and the response key each one
+// The reveal values the endpoint accepts, and the response key each one
 // fills. Both are fixed by the spec's enum — "email"/"phone" singular is not
 // accepted, which is the kind of thing that fails silently as an empty result.
 const FIELD = {
@@ -108,17 +108,22 @@ function failure(step, res) {
 /**
  * Reveal one datapoint for one LinkedIn profile.
  *
- * Follows Lusha's V3 search-then-enrich flow (api.lusha.com/openapi.json):
+ * One call to Lusha's combined endpoint (api.lusha.com/openapi.json):
  *
- *   POST /v3/contacts/search  { contacts: [{ clientReferenceId, linkedinUrl }] }
- *     -> { requestId, results: [{ id, has: [...], canReveal: [{ field, credits }] }] }
- *   POST /v3/contacts/enrich  { ids: [id], reveal: ["phones"] }
- *     -> { requestId, results: [{ emails: [{ email }], phones: [{ number }] }],
- *          billing: { creditsCharged } }
+ *   POST /v3/contacts/search-and-enrich
+ *     { contacts: [{ clientReferenceId, linkedinUrl }], reveal: ["phones"] }
+ *   -> { requestId,
+ *        results: [{ id, emails: [{ email }], phones: [{ number }] }],
+ *        billing: { creditsCharged } }
  *
- * Search is the cheap half and carries `canReveal`, which says whether the
- * datapoint exists and what it costs. Checking it before enriching means a
- * profile Lusha has no phone for never reaches the billable call at all.
+ * This is the route the n8n flow already proves works against this account —
+ * the MCP server's `contacts_search` tool is the same operation, and reads its
+ * answer from the same results[0].phones[0].number path.
+ *
+ * `reveal` is what keeps the two buttons honest: it is an enum array, and
+ * sending just one value unlocks just that datapoint. Omitting it returns every
+ * email AND phone, which is the expensive default this design exists to avoid.
+ * Billing is one search charge plus one per revealed field.
  *
  * @param {object} args
  * @param {string} args.linkedinUrl Normalized linkedin.com/in/<slug> URL.
@@ -136,46 +141,24 @@ export async function lookupContact({ linkedinUrl, field }) {
   if (!spec) return { status: "error", message: "Unknown field." };
 
   try {
-    // 1. Match the URL to a contact. Returns no contact details, so a miss here
-    //    costs nothing.
-    const search = await post("/v3/contacts/search", {
+    const res = await post("/v3/contacts/search-and-enrich", {
       contacts: [{ clientReferenceId: "1", linkedinUrl }],
-    });
-    if (!search.ok) return failure("search", search);
-
-    const results = Array.isArray(search.json?.results) ? search.json.results : [];
-    const match = results[0];
-    if (!match?.id) return { status: "not_found" };
-
-    // 2. Does Lusha actually hold this datapoint? canReveal lists only what can
-    //    be unlocked, so an absent entry means enriching would spend a request
-    //    to learn nothing.
-    const canReveal = Array.isArray(match.canReveal) ? match.canReveal : [];
-    const offer = canReveal.find((c) => c?.field === spec.reveal);
-    if (canReveal.length && !offer) return { status: "not_found" };
-
-    // 3. Reveal exactly one datapoint. `reveal` is an enum array: omitting it
-    //    returns every email AND phone, which is the expensive default this
-    //    whole two-button design exists to avoid.
-    const enrich = await post("/v3/contacts/enrich", {
-      ids: [String(match.id)],
       reveal: [spec.reveal],
     });
-    if (!enrich.ok) return failure("enrich", enrich);
+    if (!res.ok) return failure("search-and-enrich", res);
 
-    const found = values(
-      (Array.isArray(enrich.json?.results) ? enrich.json.results : [])[0],
-      spec.key
-    );
-    const charged = enrich.json?.billing?.creditsCharged;
+    const results = Array.isArray(res.json?.results) ? res.json.results : [];
+    const found = values(results[0], spec.key);
+    const charged = res.json?.billing?.creditsCharged;
     console.log(
       `[lusha] ${field} for ${linkedinUrl}: ${found.length} value(s), credits=${
         charged ?? "?"
       }`
     );
 
-    // A matched contact with nothing revealed is a real answer, not a failure:
-    // the caller records it so the same profile is never billed twice.
+    // No match and a match holding nothing are the same answer to the caller,
+    // and both are worth remembering: the cache records them so the same
+    // profile is never billed twice for the same question.
     if (!found.length) return { status: "not_found" };
     return field === "email"
       ? { status: "success", emails: found, phones: [] }
