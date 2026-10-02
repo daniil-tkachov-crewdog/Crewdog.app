@@ -1,5 +1,10 @@
 import React from "react";
-import { ArrowUpRight, Briefcase, ChevronDown, Home, Search } from "lucide-react";
+import { ArrowUpRight, Briefcase, ChevronDown, Home, Mail, Phone, Search } from "lucide-react";
+import {
+  lookupContactField,
+  type ContactField,
+  type ContactLookupResult,
+} from "@/services/contactLookup";
 import type {
   JobResult,
   PersonResult,
@@ -12,6 +17,11 @@ import type {
 // each row folded to the basics plus a Visit button, unfolded to the details.
 
 type FollowUp = (prompt: string) => void;
+
+// Whether the paid contact lookup is offered on person cards, and whether this
+// visitor is allowed to use it. Threaded down from Chat rather than read here,
+// so one settings fetch serves every card on the page.
+export type ContactLookupCtx = { enabled: boolean; signedIn: boolean };
 
 const hostOf = (url: string) => {
   try {
@@ -73,15 +83,24 @@ const PrimaryLink: React.FC<{ href: string; children: React.ReactNode }> = ({
   </a>
 );
 
-const SecondaryButton: React.FC<{ onClick: () => void; children: React.ReactNode }> = ({
-  onClick,
-  children,
-}) => (
+const SecondaryButton: React.FC<{
+  onClick: () => void;
+  children: React.ReactNode;
+  // The contact lookup spends money per click, so its buttons need a state in
+  // which they are visibly present but cannot be pressed — while one call is in
+  // flight, or when the visitor is not signed in.
+  disabled?: boolean;
+  title?: string;
+  icon?: React.ReactNode;
+}> = ({ onClick, children, disabled, title, icon }) => (
   <button
     type="button"
     onClick={onClick}
-    className="rounded-[9px] border border-[rgba(26,25,23,0.14)] bg-white px-[14px] py-2 text-[13px] text-[#1A1917] transition-colors hover:border-[rgba(26,25,23,0.28)] dark:border-[rgba(255,255,255,0.14)] dark:bg-[#1F1E24] dark:text-[#ECEBE8] dark:hover:border-[rgba(255,255,255,0.28)]"
+    disabled={disabled}
+    title={title}
+    className="flex items-center gap-[7px] rounded-[9px] border border-[rgba(26,25,23,0.14)] bg-white px-[14px] py-2 text-[13px] text-[#1A1917] transition-colors hover:border-[rgba(26,25,23,0.28)] disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:border-[rgba(26,25,23,0.14)] dark:border-[rgba(255,255,255,0.14)] dark:bg-[#1F1E24] dark:text-[#ECEBE8] dark:hover:border-[rgba(255,255,255,0.28)] dark:disabled:hover:border-[rgba(255,255,255,0.14)]"
   >
+    {icon}
     {children}
   </button>
 );
@@ -183,6 +202,150 @@ const ResultRow: React.FC<{
 const avatarCls =
   "flex h-[38px] w-[38px] shrink-0 items-center justify-center bg-[#EDECE7] text-[#1A1917] dark:bg-[#33323A] dark:text-[#ECEBE8]";
 
+// --- Contact lookup -----------------------------------------------------------
+//
+// Two buttons per person card, one datapoint each. Nothing here runs on render:
+// Lusha bills per revealed datapoint, so the call happens on a click and only
+// for the field clicked. A resolved field replaces its own button, so the same
+// profile cannot be bought twice from the same card — and the server-side cache
+// catches the cases this local state cannot see (a reload, another chat, another
+// user).
+//
+// Deliberately NOT routed through onFollowUp: that prop is Chat's send(), so a
+// lookup through it would cost a metered chat turn and leave the model deciding
+// whether to make the call.
+
+type FieldState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "done"; values: string[]; cached: boolean }
+  | { status: "empty"; cached: boolean }
+  | { status: "error"; message: string };
+
+const CONTACT_FIELDS = [
+  { field: "phone" as ContactField, label: "Check phone number", noun: "Phone" },
+  { field: "email" as ContactField, label: "Check email", noun: "Email" },
+];
+
+const fieldIcon = (field: ContactField) =>
+  field === "phone" ? (
+    <Phone className="h-[13px] w-[13px] shrink-0" strokeWidth={2.2} />
+  ) : (
+    <Mail className="h-[13px] w-[13px] shrink-0" strokeWidth={2.2} />
+  );
+
+const toState = (r: ContactLookupResult): FieldState => {
+  if (r.status === "success") return { status: "done", values: r.values, cached: r.cached };
+  if (r.status === "not_found") return { status: "empty", cached: r.cached };
+  return { status: "error", message: r.message };
+};
+
+const ContactActions: React.FC<{ url: string; ctx: ContactLookupCtx }> = ({
+  url,
+  ctx,
+}) => {
+  const [states, setStates] = React.useState<Record<ContactField, FieldState>>({
+    phone: { status: "idle" },
+    email: { status: "idle" },
+  });
+
+  // The re-entry guard has to be a ref, not the state above: two clicks in one
+  // tick both close over the same `states`, so a state check would let both
+  // through and bill twice for the same datapoint.
+  const inFlight = React.useRef<Partial<Record<ContactField, boolean>>>({});
+
+  const check = async (field: ContactField) => {
+    if (inFlight.current[field] || states[field].status !== "idle") return;
+    inFlight.current[field] = true;
+    setStates((s) => ({ ...s, [field]: { status: "loading" } }));
+    try {
+      const result = await lookupContactField(url, field);
+      setStates((s) => ({ ...s, [field]: toState(result) }));
+    } finally {
+      inFlight.current[field] = false;
+    }
+  };
+
+  const pending = CONTACT_FIELDS.filter(
+    ({ field }) => states[field].status === "idle" || states[field].status === "loading"
+  );
+  const resolved = CONTACT_FIELDS.filter(
+    ({ field }) => !pending.some((q) => q.field === field)
+  );
+
+  return (
+    <>
+      {!!pending.length && (
+      <div className="flex flex-wrap gap-2">
+        {pending.map(({ field, label }) => {
+          const st = states[field];
+          return (
+            <SecondaryButton
+              key={field}
+              icon={fieldIcon(field)}
+              onClick={() => void check(field)}
+              disabled={!ctx.signedIn || st.status === "loading"}
+              title={
+                ctx.signedIn
+                  ? undefined
+                  : "Sign in to check contact details"
+              }
+            >
+              {st.status === "loading" ? "Checking…" : label}
+            </SecondaryButton>
+          );
+        })}
+      </div>
+      )}
+
+      {!!resolved.length && (
+        <div className="flex flex-col gap-2">
+          {resolved.map(({ field, noun }) => {
+            const st = states[field];
+            return (
+              <div
+                key={field}
+                className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[13px]"
+              >
+                <span className="text-[11.5px] font-medium uppercase tracking-[0.04em] text-[#8A877F] dark:text-[#7E7B74]">
+                  {noun}
+                </span>
+                {st.status === "done" ? (
+                  <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    {st.values.map((v) => (
+                      <a
+                        key={v}
+                        href={field === "phone" ? `tel:${v.replace(/\s/g, "")}` : `mailto:${v}`}
+                        className="font-medium text-[#1A1917] underline decoration-[rgba(26,25,23,0.3)] underline-offset-2 dark:text-[#ECEBE8] dark:decoration-[rgba(255,255,255,0.3)]"
+                      >
+                        {v}
+                      </a>
+                    ))}
+                  </span>
+                ) : (
+                  <span className="text-[#5F5D57] dark:text-[#A6A39C]">
+                    {st.status === "empty"
+                      ? "Not on record for this profile."
+                      : st.status === "error"
+                        ? st.message
+                        : null}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {!ctx.signedIn && (
+        <p className="text-[12px] text-[#8A877F] dark:text-[#7E7B74]">
+          Sign in to check phone numbers and emails.
+        </p>
+      )}
+    </>
+  );
+};
+
 // --- Rows per workflow --------------------------------------------------------
 
 const PersonRow: React.FC<{
@@ -190,7 +353,8 @@ const PersonRow: React.FC<{
   open: boolean;
   onToggle: () => void;
   onFollowUp: FollowUp;
-}> = ({ p, open, onToggle, onFollowUp }) => {
+  contactLookup?: ContactLookupCtx;
+}> = ({ p, open, onToggle, onFollowUp, contactLookup }) => {
   const initials = p.name
     .split(/\s+/)
     .map((w) => w[0])
@@ -307,6 +471,7 @@ const PersonRow: React.FC<{
           Draft an intro message
         </SecondaryButton>
       </div>
+      {contactLookup?.enabled && <ContactActions url={p.url} ctx={contactLookup} />}
     </ResultRow>
   );
 };
@@ -474,7 +639,8 @@ const GROUP_META = {
 export const ResultGroupCard: React.FC<{
   group: ResultGroup;
   onFollowUp: FollowUp;
-}> = ({ group, onFollowUp }) => {
+  contactLookup?: ContactLookupCtx;
+}> = ({ group, onFollowUp, contactLookup }) => {
   const n = group.items.length;
   // Folded by default except the first, so the strongest result is visible.
   const [open, setOpen] = React.useState<boolean[]>(() =>
@@ -511,6 +677,7 @@ export const ResultGroupCard: React.FC<{
               open={open[i]}
               onToggle={() => toggle(i)}
               onFollowUp={onFollowUp}
+              contactLookup={contactLookup}
             />
           ))}
         {group.kind === "jobs" &&

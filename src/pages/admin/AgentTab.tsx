@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { getSettings, saveSettings, type AgentConfig } from "@/services/settings";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import JobDescriptionTab from "./agent/JobDescriptionTab";
 import LinkedinFinderTab from "./agent/LinkedinFinderTab";
@@ -24,6 +25,7 @@ const AgentTab = () => {
   const [finderEnabled, setFinderEnabled] = useState(false);
   const [jobFinderEnabled, setJobFinderEnabled] = useState(false);
   const [accomFinderEnabled, setAccomFinderEnabled] = useState(false);
+  const [lushaEnabled, setLushaEnabled] = useState(false);
   const [cfg, setCfg] = useState<AgentConfig>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -35,6 +37,7 @@ const AgentTab = () => {
       setFinderEnabled(s.linkedin_finder_enabled);
       setJobFinderEnabled(s.job_finder_enabled);
       setAccomFinderEnabled(s.accommodation_finder_enabled);
+      setLushaEnabled(s.lusha_enabled);
       setCfg(s.agent_config ?? {});
       setLoading(false);
     })();
@@ -51,6 +54,7 @@ const AgentTab = () => {
         linkedin_finder_enabled: finderEnabled,
         job_finder_enabled: jobFinderEnabled,
         accommodation_finder_enabled: accomFinderEnabled,
+        lusha_enabled: lushaEnabled,
         agent_config: cfg,
       });
       toast.success("AI Agent settings saved");
@@ -65,6 +69,20 @@ const AgentTab = () => {
 
   return (
     <div className="max-w-3xl space-y-6">
+      <section className="rounded-lg border p-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium">Contact lookup (Lusha)</span>
+          <Switch checked={lushaEnabled} onCheckedChange={setLushaEnabled} />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Adds &ldquo;Check phone number&rdquo; and &ldquo;Check email&rdquo; to every LinkedIn
+          person card. Nothing is looked up during a search — only a click on one card calls
+          Lusha, and only for the one datapoint clicked. Lusha bills per revealed datapoint, so
+          each first click on a profile costs credits; answers are cached and shared, so repeats
+          are free. Off means the buttons are hidden and the server refuses the call.
+        </p>
+      </section>
+
       <div className="inline-flex rounded-lg border bg-muted/40 p-0.5">
         {WORKFLOWS.map((w) => (
           <button

@@ -27,3 +27,8 @@ services:
         sync: false
       - key: VITE_N8N_GATECRASHER_URL
         sync: false
+      # Server-only. Lusha bills per revealed contact datapoint, so this key
+      # must never reach the browser — note the absent VITE_ prefix. The lookup
+      # also stays off until lusha_enabled is switched on in the admin.
+      - key: LUSHA_API_KEY
+        sync: false

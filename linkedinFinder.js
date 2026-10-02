@@ -15,8 +15,10 @@ import { LINKEDIN_FINDER_DEFAULTS as DEFAULTS, FINDER_ROUTES } from "./agentProm
 const PROFILE_RE = /^https?:\/\/([a-z0-9-]+\.)*linkedin\.com\/in\/[^/?#\s]+/i;
 
 // Strip tracking params, trailing slashes and the locale subdomain so the same
-// person found twice under different URLs collapses to one candidate.
-function normalizeUrl(url) {
+// person found twice under different URLs collapses to one candidate. Exported
+// because the contact-lookup cache keys on it too: the same person has to be
+// one cache row for the same reason they are one candidate here.
+export function normalizeUrl(url) {
   const raw = String(url ?? "").trim();
   if (!PROFILE_RE.test(raw)) return "";
   try {

@@ -10,6 +10,7 @@ import {
   ResultGroupCard,
   ToolSummary,
   resultsToText,
+  type ContactLookupCtx,
 } from "@/components/chat/ResultCards";
 import { CARDS_MARKER, type ResultGroup } from "@/types/chatResults";
 import { extractCv, type AttachedCv } from "@/services/cv";
@@ -65,7 +66,8 @@ const REPLY_TEXT_CLS =
 const AssistantBody: React.FC<{
   message: Message;
   onFollowUp: (prompt: string) => void;
-}> = ({ message, onFollowUp }) => {
+  contactLookup: ContactLookupCtx;
+}> = ({ message, onFollowUp, contactLookup }) => {
   const results = message.results ?? [];
   const [before, ...rest] = message.content.split(CARDS_MARKER);
   const intro = before.trim();
@@ -77,7 +79,12 @@ const AssistantBody: React.FC<{
       ))}
       {intro && <div className={REPLY_TEXT_CLS}>{renderRichText(intro)}</div>}
       {results.map((g, i) => (
-        <ResultGroupCard key={`g${i}`} group={g} onFollowUp={onFollowUp} />
+        <ResultGroupCard
+          key={`g${i}`}
+          group={g}
+          onFollowUp={onFollowUp}
+          contactLookup={contactLookup}
+        />
       ))}
       {outro && <div className={REPLY_TEXT_CLS}>{renderRichText(outro)}</div>}
     </div>
@@ -225,6 +232,24 @@ const Chat: React.FC = () => {
   const navigate = useNavigate();
   const { resolvedTheme, setTheme } = useTheme();
   const isAuthed = !!user;
+
+  // Whether person cards offer the paid contact lookup. Read once here and
+  // passed down; the server re-reads the flag before it calls Lusha, so this
+  // copy only decides what is on screen.
+  const [lushaEnabled, setLushaEnabled] = React.useState(false);
+  React.useEffect(() => {
+    let live = true;
+    void getSettings().then((s) => {
+      if (live) setLushaEnabled(s.lusha_enabled);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+  const contactLookup = React.useMemo<ContactLookupCtx>(
+    () => ({ enabled: lushaEnabled, signedIn: isAuthed }),
+    [lushaEnabled, isAuthed]
+  );
 
   const handleLogout = async () => {
     await signOut();
@@ -819,7 +844,11 @@ const Chat: React.FC = () => {
                           {renderRichText(m.content)}
                         </div>
                       ) : (
-                        <AssistantBody message={m} onFollowUp={send} />
+                        <AssistantBody
+                          message={m}
+                          onFollowUp={send}
+                          contactLookup={contactLookup}
+                        />
                       )}
                     </div>
                     <CopyButton

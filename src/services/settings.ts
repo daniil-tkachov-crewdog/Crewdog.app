@@ -76,6 +76,9 @@ export type AppSettings = {
   linkedin_finder_enabled: boolean;
   job_finder_enabled: boolean;
   accommodation_finder_enabled: boolean;
+  // Kill switch for the paid Lusha contact lookup on LinkedIn cards. The server
+  // reads this itself; this copy only drives the admin toggle.
+  lusha_enabled: boolean;
   agent_config: AgentConfig;
   seo: SeoSettings;
   usage_limits: UsageLimits;
@@ -92,6 +95,7 @@ const DEFAULTS: AppSettings = {
   linkedin_finder_enabled: false,
   job_finder_enabled: false,
   accommodation_finder_enabled: false,
+  lusha_enabled: false,
   agent_config: {},
   seo: {},
   usage_limits: {},
@@ -101,7 +105,7 @@ export async function getSettings(): Promise<AppSettings> {
   // Authenticated users can read the full row directly (RLS: authenticated).
   const { data, error } = await supabase
     .from("app_settings")
-    .select("chat_model, web_search, file_search, system_prompt, user_prompt_addition, agent_enabled, linkedin_finder_enabled, job_finder_enabled, accommodation_finder_enabled, agent_config, seo, usage_limits, updated_at")
+    .select("chat_model, web_search, file_search, system_prompt, user_prompt_addition, agent_enabled, linkedin_finder_enabled, job_finder_enabled, accommodation_finder_enabled, lusha_enabled, agent_config, seo, usage_limits, updated_at")
     .eq("id", "global")
     .maybeSingle();
   if (!error && data) return { ...DEFAULTS, ...data };
