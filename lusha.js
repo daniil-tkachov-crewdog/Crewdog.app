@@ -61,84 +61,64 @@ async function post(path, body) {
   }
 }
 
-// --- response parsing ------------------------------------------------------
-//
-// Lusha has shipped three generations of this API and moves field names
-// between them (emailAddresses/emails, phoneNumbers/phones, values that are
-// bare strings in one version and { email } / { number } objects in another).
-// Rather than pin one spelling and break on the next revision, walk the
-// response and collect from any key that names the thing we asked for. Only
-// keys matching /email/i or /phone|number/i are read, so this cannot scrape
-// unrelated strings out of the payload.
+// --- lookup ----------------------------------------------------------------
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// The reveal values the enrich endpoint accepts, and the response key each one
+// fills. Both are fixed by the spec's enum — "email"/"phone" singular is not
+// accepted, which is the kind of thing that fails silently as an empty result.
+const FIELD = {
+  email: { reveal: "emails", key: "emails" },
+  phone: { reveal: "phones", key: "phones" },
+};
 
-function collect(node, keyRe, pick, out, depth = 0) {
-  if (!node || depth > 8) return out;
-  if (Array.isArray(node)) {
-    for (const item of node) collect(item, keyRe, pick, out, depth + 1);
-    return out;
-  }
-  if (typeof node !== "object") return out;
-
-  for (const [key, value] of Object.entries(node)) {
-    if (keyRe.test(key)) {
-      for (const v of Array.isArray(value) ? value : [value]) {
-        const got = pick(v);
-        if (got && !out.includes(got)) out.push(got);
-      }
-    }
-    // Keep descending regardless: the hit may be nested under `data`,
-    // `contacts`, or a per-contact wrapper keyed by id.
-    if (value && typeof value === "object") {
-      collect(value, keyRe, pick, out, depth + 1);
-    }
+// results[].emails is [{ email, type, confidence, updateDate }] and
+// results[].phones is [{ number, type, doNotCall, updateDate }]. Take the one
+// string each carries; tolerate a bare string in case the shape ever loosens.
+function values(result, key) {
+  const list = Array.isArray(result?.[key]) ? result[key] : [];
+  const out = [];
+  for (const item of list) {
+    const v =
+      typeof item === "string"
+        ? item.trim()
+        : String(item?.email ?? item?.number ?? "").trim();
+    if (v && !out.includes(v)) out.push(v);
   }
   return out;
 }
 
-function pickEmail(v) {
-  if (typeof v === "string") return EMAIL_RE.test(v.trim()) ? v.trim() : "";
-  if (v && typeof v === "object") {
-    for (const k of ["email", "emailAddress", "address", "value"]) {
-      const s = String(v[k] ?? "").trim();
-      if (EMAIL_RE.test(s)) return s;
-    }
-  }
-  return "";
+function failure(step, res) {
+  console.error(`[lusha] ${step} HTTP ${res.status}:`, (res.text || "").slice(0, 300));
+  // 402 and 403 are the two worth telling apart on screen: one is a balance to
+  // top up, the other a plan that does not sell this at all. Everything else is
+  // ours to read in the log, not the user's to decode.
+  const message =
+    res.status === 401
+      ? "Contact lookup is not authorized — check the Lusha API key."
+      : res.status === 402
+        ? "No Lusha credits left."
+        : res.status === 403
+          ? "This Lusha plan does not include contact lookup."
+          : res.status === 429
+            ? "Lusha is rate limiting us — try again shortly."
+            : "Contact lookup is unavailable right now.";
+  return { status: "error", message };
 }
-
-function pickPhone(v) {
-  const clean = (s) => {
-    const str = String(s ?? "").trim();
-    // At least 7 digits, and nothing but phone-shaped characters. Rules out
-    // ids, counts and booleans that happen to live under a *Number key.
-    const digits = str.replace(/\D/g, "");
-    if (digits.length < 7 || digits.length > 20) return "";
-    return /^[+()\d\s.-]+$/.test(str) ? str : "";
-  };
-  if (typeof v === "string" || typeof v === "number") return clean(v);
-  if (v && typeof v === "object") {
-    for (const k of ["number", "phoneNumber", "internationalNumber", "value"]) {
-      const got = clean(v[k]);
-      if (got) return got;
-    }
-  }
-  return "";
-}
-
-export function extractEmails(json) {
-  return collect(json, /email/i, pickEmail, []);
-}
-
-export function extractPhones(json) {
-  return collect(json, /phone|^number$|Number$/i, pickPhone, []);
-}
-
-// --- lookup ----------------------------------------------------------------
 
 /**
  * Reveal one datapoint for one LinkedIn profile.
+ *
+ * Follows Lusha's V3 search-then-enrich flow (api.lusha.com/openapi.json):
+ *
+ *   POST /v3/contacts/search  { contacts: [{ clientReferenceId, linkedinUrl }] }
+ *     -> { requestId, results: [{ id, has: [...], canReveal: [{ field, credits }] }] }
+ *   POST /v3/contacts/enrich  { ids: [id], reveal: ["phones"] }
+ *     -> { requestId, results: [{ emails: [{ email }], phones: [{ number }] }],
+ *          billing: { creditsCharged } }
+ *
+ * Search is the cheap half and carries `canReveal`, which says whether the
+ * datapoint exists and what it costs. Checking it before enriching means a
+ * profile Lusha has no phone for never reaches the billable call at all.
  *
  * @param {object} args
  * @param {string} args.linkedinUrl Normalized linkedin.com/in/<slug> URL.
@@ -152,64 +132,54 @@ export async function lookupContact({ linkedinUrl, field }) {
   if (!apiKey()) {
     return { status: "disabled", message: "Contact lookup is not configured." };
   }
-  const wantEmail = field === "email";
+  const spec = FIELD[field];
+  if (!spec) return { status: "error", message: "Unknown field." };
 
   try {
-    // 1. Match the URL to a contact. No PII, so a miss here costs nothing.
+    // 1. Match the URL to a contact. Returns no contact details, so a miss here
+    //    costs nothing.
     const search = await post("/v3/contacts/search", {
-      contacts: [{ contactId: "1", linkedinUrl }],
+      contacts: [{ clientReferenceId: "1", linkedinUrl }],
     });
+    if (!search.ok) return failure("search", search);
 
-    if (!search.ok) {
-      console.error(
-        `[lusha] search HTTP ${search.status}:`,
-        (search.text || "").slice(0, 300)
-      );
-      return {
-        status: "error",
-        message:
-          search.status === 401 || search.status === 403
-            ? "Contact lookup is not authorized."
-            : "Contact lookup is unavailable right now.",
-      };
-    }
+    const results = Array.isArray(search.json?.results) ? search.json.results : [];
+    const match = results[0];
+    if (!match?.id) return { status: "not_found" };
 
-    const requestId = search.json?.requestId ?? search.json?.request_id ?? "";
-    const matches = Array.isArray(search.json?.contacts)
-      ? search.json.contacts
-      : [];
-    const first = matches[0];
-    if (!requestId || !first) return { status: "not_found" };
+    // 2. Does Lusha actually hold this datapoint? canReveal lists only what can
+    //    be unlocked, so an absent entry means enriching would spend a request
+    //    to learn nothing.
+    const canReveal = Array.isArray(match.canReveal) ? match.canReveal : [];
+    const offer = canReveal.find((c) => c?.field === spec.reveal);
+    if (canReveal.length && !offer) return { status: "not_found" };
 
-    // Lusha echoes our contactId and adds its own; the enrich step wants
-    // whichever one it issued.
-    const id = first.id ?? first.contactId ?? first.contact_id ?? "1";
-
-    // 2. Reveal exactly one datapoint. Both flags are always sent, one of them
-    //    false, so a future default-on cannot bill us for the other.
+    // 3. Reveal exactly one datapoint. `reveal` is an enum array: omitting it
+    //    returns every email AND phone, which is the expensive default this
+    //    whole two-button design exists to avoid.
     const enrich = await post("/v3/contacts/enrich", {
-      requestId,
-      contactIds: [String(id)],
-      revealEmails: wantEmail,
-      revealPhones: !wantEmail,
+      ids: [String(match.id)],
+      reveal: [spec.reveal],
     });
+    if (!enrich.ok) return failure("enrich", enrich);
 
-    if (!enrich.ok) {
-      console.error(
-        `[lusha] enrich HTTP ${enrich.status}:`,
-        (enrich.text || "").slice(0, 300)
-      );
-      return { status: "error", message: "Contact lookup is unavailable right now." };
-    }
-
-    const emails = wantEmail ? extractEmails(enrich.json) : [];
-    const phones = wantEmail ? [] : extractPhones(enrich.json);
-    const found = wantEmail ? emails.length : phones.length;
+    const found = values(
+      (Array.isArray(enrich.json?.results) ? enrich.json.results : [])[0],
+      spec.key
+    );
+    const charged = enrich.json?.billing?.creditsCharged;
+    console.log(
+      `[lusha] ${field} for ${linkedinUrl}: ${found.length} value(s), credits=${
+        charged ?? "?"
+      }`
+    );
 
     // A matched contact with nothing revealed is a real answer, not a failure:
     // the caller records it so the same profile is never billed twice.
-    if (!found) return { status: "not_found" };
-    return { status: "success", emails, phones };
+    if (!found.length) return { status: "not_found" };
+    return field === "email"
+      ? { status: "success", emails: found, phones: [] }
+      : { status: "success", emails: [], phones: found };
   } catch (err) {
     const aborted = err?.name === "AbortError";
     console.error("[lusha] lookup failed:", err?.message || err);
