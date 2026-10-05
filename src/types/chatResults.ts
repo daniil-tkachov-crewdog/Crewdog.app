@@ -42,6 +42,9 @@ export type JobResult = {
   url: string;
   is_agency: boolean;
   verified: boolean | null;
+  // Which search found it: the employer's own advert, or a board/agency
+  // listing. The cards show the two as separate sections, direct first.
+  source_type?: "direct" | "board";
 };
 
 export type PlaceResult = {

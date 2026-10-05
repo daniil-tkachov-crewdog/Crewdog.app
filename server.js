@@ -51,6 +51,8 @@ function summarizeAgentCall(name, args, result) {
     row.include_agencies = Boolean(result?.include_agencies);
     row.found = result?.found_count ?? 0;
     row.returned = result?.jobs?.length ?? 0;
+    row.direct = result?.direct_count ?? 0;
+    row.board = result?.board_count ?? 0;
   } else if (name === "find_linkedin_professionals") {
     row.job_title = String(args?.job_title ?? "").slice(0, 120);
     row.location = String(args?.location ?? "").slice(0, 120);

@@ -26,7 +26,7 @@ export type AgentConfig = {
   jobfinder_include_agencies?: boolean;
   jobfinder_verify_links?: boolean;
   jobfinder_expiry_phrases?: string;
-  jobfinder_search_instructions_agencies?: string;
+  jobfinder_search_instructions_boards?: string;
   jobfinder_search_instructions_direct?: string;
   jobfinder_compress_instructions?: string;
   // Workflow 4 ("Accommodation Finder") keys carry an `accom_` prefix.

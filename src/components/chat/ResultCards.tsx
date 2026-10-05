@@ -623,6 +623,23 @@ const PlaceRow: React.FC<{
 
 // --- Group panel --------------------------------------------------------------
 
+// Jobs arrive in two blocks: the employers' own adverts, then the boards and
+// agencies. The order already carries that, but the candidate needs to see
+// which is which — applying to the company directly is the better route — so
+// each block gets a heading, and only when both blocks are actually there.
+const JOB_SECTIONS = {
+  direct: "Direct from employers",
+  board: "Via job boards & agencies",
+} as const;
+
+const jobSection = (j: JobResult) => (j.source_type === "board" ? "board" : "direct");
+
+const SectionHeader: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="border-b border-[rgba(26,25,23,0.07)] bg-[rgba(26,25,23,0.025)] px-4 py-[7px] text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[#6E6B64] dark:border-[rgba(255,255,255,0.07)] dark:bg-[rgba(255,255,255,0.03)] dark:text-[#96938C]">
+    {children}
+  </div>
+);
+
 const GROUP_META = {
   people: {
     label: "People",
@@ -650,6 +667,12 @@ export const ResultGroupCard: React.FC<{
   const toggle = (i: number) =>
     setOpen((o) => o.map((v, k) => (k === i ? !v : v)));
   const meta = GROUP_META[group.kind];
+  // A single heading over the whole list says nothing, so the sections only
+  // appear once there is something on both sides of the line.
+  const splitJobs =
+    group.kind === "jobs" &&
+    group.items.some((j) => jobSection(j) === "direct") &&
+    group.items.some((j) => jobSection(j) === "board");
 
   return (
     <div className="overflow-hidden rounded-[14px] border border-[rgba(26,25,23,0.12)] bg-white dark:border-[rgba(255,255,255,0.12)] dark:bg-[#1F1E24]">
@@ -681,15 +704,22 @@ export const ResultGroupCard: React.FC<{
             />
           ))}
         {group.kind === "jobs" &&
-          group.items.map((j, i) => (
-            <JobRow
-              key={j.url}
-              j={j}
-              open={open[i]}
-              onToggle={() => toggle(i)}
-              onFollowUp={onFollowUp}
-            />
-          ))}
+          group.items.map((j, i) => {
+            const section = jobSection(j);
+            const showHeader =
+              splitJobs && (i === 0 || jobSection(group.items[i - 1]) !== section);
+            return (
+              <React.Fragment key={j.url}>
+                {showHeader && <SectionHeader>{JOB_SECTIONS[section]}</SectionHeader>}
+                <JobRow
+                  j={j}
+                  open={open[i]}
+                  onToggle={() => toggle(i)}
+                  onFollowUp={onFollowUp}
+                />
+              </React.Fragment>
+            );
+          })}
         {group.kind === "places" &&
           group.items.map((h, i) => (
             <PlaceRow
@@ -753,7 +783,17 @@ export function resultsToText(results: ResultGroup[]): string {
             )
           : g.kind === "jobs"
             ? g.items.map((j) =>
-                `- ${joinDot(j.title, j.company, j.location, j.salary, j.is_agency ? "agency" : "")} — ${j.url}`
+                `- ${joinDot(
+                  j.title,
+                  j.company,
+                  j.location,
+                  j.salary,
+                  j.is_agency
+                    ? "agency"
+                    : jobSection(j) === "direct"
+                      ? "direct"
+                      : "job board"
+                )} — ${j.url}`
               )
             : g.items.map((h) =>
                 `- ${joinDot(h.title, h.location, h.price, h.bills)} — ${h.url}`

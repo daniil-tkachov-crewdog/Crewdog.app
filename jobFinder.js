@@ -1,15 +1,23 @@
 // Workflow 3 — "Job finder" pipeline.
-// a candidate's request -> one web search pass over live adverts -> dedupe and
-// cap in JS -> a list of jobs with title, location, salary and link.
+// a candidate's request -> two web searches in parallel (the employers' own
+// adverts, and the boards and agencies) -> merge direct-first -> check every
+// link -> a list of jobs with title, location, salary and link.
 //
-// Unlike workflows 1 and 2 this looks for vacancies rather than people, and it
-// stays a single MODEL call: a second pass over the same search results has
-// nothing new to read. What it does have, since links started coming back
-// dead, is a pass over the live pages — see linkCheck.js. A web search reads an
-// index, and an index is a snapshot; expired adverts are the most thoroughly
-// indexed pages a job board has. So every surviving URL is fetched before the
-// candidate sees it, which costs no tokens and catches what the snapshot
-// cannot.
+// Two searches rather than one because one prompt that merely allowed board
+// listings returned nothing else: boards are trivially easy to find, so the
+// model found them and stopped, and the candidate got a page of Indeed links.
+// Splitting the passes gives the employers' own adverts their own search
+// budget, and the merge puts them on top — which is the order a candidate
+// actually wants, since a direct advert means applying to the company rather
+// than through a middleman.
+//
+// Unlike workflows 1 and 2 there is no verification MODEL call: a second pass
+// over the same search results has nothing new to read. What there is, since
+// links started coming back dead, is a pass over the live pages — see
+// linkCheck.js. A web search reads an index, and an index is a snapshot;
+// expired adverts are the most thoroughly indexed pages a job board has. So
+// every surviving URL is fetched before the candidate sees it, which costs no
+// tokens and catches what the snapshot cannot.
 
 import { outputText, addUsage, parseJson } from "./agent.js";
 import { JOB_FINDER_DEFAULTS as DEFAULTS } from "./agentPrompts.js";
@@ -92,61 +100,93 @@ export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o"
   const maxAgeDays = Math.max(1, Number(c.jobfinder_max_age_days) || 30);
   const includeAgencies = c.jobfinder_include_agencies !== false;
 
-  // The switch picks the prompt, and nothing else in the pipeline changes: the
-  // difference between "agencies welcome" and "direct adverts only" is entirely
-  // a matter of which sources the search is told to accept.
-  const instructions = includeAgencies
-    ? c.jobfinder_search_instructions_agencies
-    : c.jobfinder_search_instructions_direct;
-
-  // 2) One search pass.
+  // 2) Two searches, in parallel. The direct pass always runs and has to be
+  // able to fill the list on its own, so it gets the whole over-fetch budget.
+  // The board pass is a backstop for the slots the direct pass cannot fill, and
+  // only runs when the admin has asked for boards and agencies at all — but it
+  // too can end up filling the whole list, so it needs more than the list
+  // length to survive link checking.
   const criteriaBlock =
     `What the user is looking for: ${query}\n` +
     (location ? `Location: ${location}\n` : "Location: not specified — search broadly, and say where each job is.\n") +
     (keyFactors.length ? `Other things they asked for: ${keyFactors.join(", ")}\n` : "");
 
-  const searchResp = await openai.responses.create({
-    model,
-    instructions,
-    tools: [{ type: "web_search" }],
-    input:
-      `Find up to ${overFetch} currently open data centre vacancies.\n` +
-      criteriaBlock +
-      `\nToday is ${new Date().toISOString().slice(0, 10)}. Do not return an advert posted more than ${maxAgeDays} days ago, or one you cannot date and cannot confirm is still open.\n` +
-      (includeAgencies
-        ? `Recruitment agency adverts are allowed on this pass. Flag each one with is_agency true.\n`
-        : `Recruitment agency adverts are NOT allowed on this pass. Return only the employer's own advert, and set is_agency false on every job.\n`) +
-      `\nReturn ONLY JSON: {"jobs":[{"title":string,"company":string,"location":string,"salary":string,"employment_type":string,"posted_date":string,"status_text":string,"source":string,"url":string,"is_agency":boolean}],"note":string}\n` +
-      `status_text: the words the advert itself uses about its own status or date, quoted exactly as they appear ("Posted 4 days ago", "Applications close 12 October", "Actively hiring"). Leave it empty if the page states nothing of the kind — do not paraphrase and do not supply your own wording.`,
-  });
-  addUsage(usage, searchResp);
-  const out = parseJson(outputText(searchResp), { jobs: [], note: "" });
-  const rawJobs = Array.isArray(out.jobs) ? out.jobs : [];
-
-  // 3) Dedupe on the normalised advert URL. No cap here any more: the cap now
-  // falls after verification, or a pass that drops six of eight hands back two.
-  const byUrl = new Map();
-  for (const job of rawJobs) {
-    const url = normalizeUrl(job?.url);
-    if (!url || !isAdvertUrl(url)) continue;
-    if (byUrl.has(url)) continue;
-    const isAgency = Boolean(job?.is_agency);
-    // The direct-only pass promises employer adverts; honour that here too, so
-    // a model that ignores the prompt cannot leak agency listings through.
-    if (!includeAgencies && isAgency) continue;
-    byUrl.set(url, {
-      title: str(job?.title),
-      company: str(job?.company),
-      location: str(job?.location),
-      salary: str(job?.salary),
-      employment_type: str(job?.employment_type),
-      posted_date: str(job?.posted_date),
-      status_text: str(job?.status_text),
-      source: str(job?.source),
-      url,
-      is_agency: isAgency,
+  const passes = [
+    { source: "direct", instructions: c.jobfinder_search_instructions_direct, want: overFetch },
+  ];
+  if (includeAgencies) {
+    passes.push({
+      source: "board",
+      instructions: c.jobfinder_search_instructions_boards,
+      want: Math.min(20, Math.max(maxResults, maxResults * (verifyEnabled ? 2 : 1))),
     });
-    if (byUrl.size >= overFetch) break;
+  }
+
+  const passResults = await Promise.all(
+    passes.map((pass) =>
+      openai.responses
+        .create({
+          model,
+          instructions: pass.instructions,
+          tools: [{ type: "web_search" }],
+          input:
+            `Find up to ${pass.want} currently open data centre vacancies.\n` +
+            criteriaBlock +
+            `\nToday is ${new Date().toISOString().slice(0, 10)}. Do not return an advert posted more than ${maxAgeDays} days ago, or one you cannot date and cannot confirm is still open.\n` +
+            (pass.source === "direct"
+              ? `This pass accepts the hiring employer's own advert ONLY. Set is_agency false on every job.\n`
+              : `This pass accepts job board and recruitment agency listings. Flag each agency-posted advert with is_agency true.\n`) +
+            `\nReturn ONLY JSON: {"jobs":[{"title":string,"company":string,"location":string,"salary":string,"employment_type":string,"posted_date":string,"status_text":string,"source":string,"url":string,"is_agency":boolean}],"note":string}\n` +
+            `status_text: the words the advert itself uses about its own status or date, quoted exactly as they appear ("Posted 4 days ago", "Applications close 12 October", "Actively hiring"). Leave it empty if the page states nothing of the kind — do not paraphrase and do not supply your own wording.`,
+        })
+        .then((resp) => {
+          addUsage(usage, resp);
+          const out = parseJson(outputText(resp), { jobs: [], note: "" });
+          return {
+            source: pass.source,
+            want: pass.want,
+            jobs: Array.isArray(out.jobs) ? out.jobs : [],
+            note: str(out.note),
+          };
+        })
+    )
+  );
+  const rawCount = passResults.reduce((n, p) => n + p.jobs.length, 0);
+
+  // 3) Merge and dedupe on the normalised advert URL. The passes are walked
+  // direct-first, so when both find the same role the employer's own URL is the
+  // one kept — which is the whole point of running the direct pass. No cap on
+  // the list here any more: the cap falls after verification, or a pass that
+  // drops six of eight hands back two.
+  const byUrl = new Map();
+  for (const pass of passResults) {
+    let taken = 0;
+    for (const job of pass.jobs) {
+      const url = normalizeUrl(job?.url);
+      if (!url || !isAdvertUrl(url)) continue;
+      if (byUrl.has(url)) continue;
+      // The direct pass promises employer adverts; honour that here too, so a
+      // model that ignores the prompt cannot file an agency post as direct.
+      const isAgency = Boolean(job?.is_agency);
+      if (pass.source === "direct" && isAgency) continue;
+      byUrl.set(url, {
+        title: str(job?.title),
+        company: str(job?.company),
+        location: str(job?.location),
+        salary: str(job?.salary),
+        employment_type: str(job?.employment_type),
+        posted_date: str(job?.posted_date),
+        status_text: str(job?.status_text),
+        source: str(job?.source),
+        url,
+        is_agency: isAgency,
+        // Which pass found it, and therefore which group it is shown under.
+        // Trusted over the model's own is_agency flag for grouping: the pass
+        // is a fact about where we looked, the flag is a judgement call.
+        source_type: pass.source,
+      });
+      if (++taken >= pass.want) break;
+    }
   }
   const candidates = [...byUrl.values()];
 
@@ -154,7 +194,7 @@ export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o"
   // an otherwise healthy 200, or a bounce to the board's search page all mean
   // the advert is gone. A 403 from a board that blocks datacentre IPs means
   // only that we were blocked, so those stay in, flagged.
-  let jobs = candidates;
+  let survivors = candidates;
   let checkStats = null;
   let droppedDead = [];
   if (verifyEnabled) {
@@ -162,11 +202,22 @@ export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o"
       phrases: parsePhrases(c.jobfinder_expiry_phrases, JOB_EXPIRY_PHRASES),
       isDeadEndUrl: (u) => !isAdvertUrl(u),
     });
-    jobs = kept;
+    survivors = kept;
     checkStats = stats;
     droppedDead = dropped;
   }
-  jobs = jobs.slice(0, maxResults);
+
+  // 5) Assemble the list direct-first: every employer advert that survived,
+  // then board and agency listings for whatever slots are left. Each group
+  // keeps the order its own search returned it in, which is relevance order.
+  // So a search that finds eight direct adverts shows eight direct adverts and
+  // no board links at all — the boards only ever fill a gap.
+  const direct = survivors.filter((j) => j.source_type === "direct");
+  const boards = survivors.filter((j) => j.source_type !== "direct");
+  const jobs = [
+    ...direct.slice(0, maxResults),
+    ...boards.slice(0, Math.max(0, maxResults - Math.min(direct.length, maxResults))),
+  ];
 
   return {
     result: {
@@ -174,12 +225,18 @@ export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o"
       include_agencies: includeAgencies,
       max_age_days: maxAgeDays,
       jobs,
-      found_count: rawJobs.length,
-      dropped_count: rawJobs.length - jobs.length,
+      direct_count: jobs.filter((j) => j.source_type === "direct").length,
+      board_count: jobs.filter((j) => j.source_type !== "direct").length,
+      found_count: rawCount,
+      dropped_count: rawCount - jobs.length,
       link_check: checkStats
         ? { ...checkStats, dropped: droppedDead.slice(0, 10) }
         : { skipped: true },
-      note: str(out.note),
+      // Either pass may have something to say about what it could not find.
+      note: passResults
+        .map((p) => p.note)
+        .filter(Boolean)
+        .join(" "),
       // Handed back as tool output rather than as system instructions, the same
       // way workflow 2 does it, so the chat model formats the list.
       presentation: c.jobfinder_compress_instructions,

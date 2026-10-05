@@ -114,11 +114,14 @@ function jobs(args, result) {
       source: str(j?.source),
       url: str(j?.url),
       is_agency: Boolean(j?.is_agency),
+      source_type: j?.source_type === "board" ? "board" : "direct",
       // true: proven live; false: the site blocked the check; null: not checked.
       verified: typeof j?.verified === "boolean" ? j.verified : null,
     }))
     .filter((j) => j.title && j.url);
   const c = result?.criteria ?? {};
+  const nDirect = items.filter((j) => j.source_type === "direct").length;
+  const nBoard = items.length - nDirect;
   return {
     kind: "jobs",
     items,
@@ -126,6 +129,16 @@ function jobs(args, result) {
       label: `Searched job adverts · ${Number(result?.found_count) || 0} found · ${items.length} still open`,
       steps: [
         ["Searched", [str(c.query), str(c.location), ...list(c.key_factors)].filter(Boolean).join(", ")],
+        [
+          "Sources",
+          [
+            nDirect && `${nDirect} direct from employers`,
+            nBoard && `${nBoard} via job boards or agencies`,
+          ].filter(Boolean).join(", ") ||
+            (result?.include_agencies === false
+              ? "employer career pages only"
+              : "employer career pages, job boards and agencies"),
+        ],
         linkStep(result?.link_check, "expired or closed"),
       ].filter(Boolean),
     },
