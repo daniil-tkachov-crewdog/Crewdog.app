@@ -1,5 +1,4 @@
 // src/services/contactLookup.ts
-import { apiUrl } from "@/lib/config";
 import { getAccessToken } from "@/lib/supabase";
 
 export type ContactField = "phone" | "email";
@@ -41,7 +40,12 @@ export async function lookupContactField(
       return { status: "error", message: "Please sign in to check contact details." };
     }
 
-    const resp = await fetch(apiUrl("/contact-lookup"), {
+    // Relative, exactly like Chat's fetch("/api/chat"). NOT apiUrl(): that
+    // resolves VITE_API_BASE, which points at the separate gatecrasher service,
+    // and this route lives on the server that serves this page. Sending it
+    // through apiUrl() reached a backend with no such route, which 404s — read
+    // on screen as "no contact details found" while Lusha was never called.
+    const resp = await fetch("/api/contact-lookup", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -58,6 +62,20 @@ export async function lookupContactField(
     }
     const body = (parsed ?? {}) as Record<string, unknown>;
     const message = String(body.message ?? "").trim();
+
+    // A reply our own API did not write — a 404 from the wrong host, an HTML
+    // error page, a proxy — must never be shown as "no contact details found".
+    // Those two mean opposite things: one is a broken request, the other is a
+    // real answer about a real person. Say the status code out loud instead;
+    // it is the difference between a bug and a dead end.
+    if (!body.status) {
+      return {
+        status: "error",
+        message: resp.ok
+          ? GENERIC_ERROR
+          : `Contact lookup failed (HTTP ${resp.status}).`,
+      };
+    }
 
     switch (body.status) {
       case "success": {
