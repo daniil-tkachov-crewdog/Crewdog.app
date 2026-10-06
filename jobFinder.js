@@ -6,10 +6,14 @@
 // Two searches rather than one because one prompt that merely allowed board
 // listings returned nothing else: boards are trivially easy to find, so the
 // model found them and stopped, and the candidate got a page of Indeed links.
-// Splitting the passes gives the employers' own adverts their own search
-// budget, and the merge puts them on top — which is the order a candidate
-// actually wants, since a direct advert means applying to the company rather
-// than through a middleman.
+// Splitting the passes gives the company career pages their own search budget,
+// and the merge puts them on top — which is the order a candidate actually
+// wants, since applying on the company's own site means no middleman.
+//
+// "Direct" here means the company's OWN DOMAIN. A vacancy on
+// boards.greenhouse.io or <company>.myworkdayjobs.com is not a career page, it
+// is recruitment software the employer rents, and it belongs with the boards.
+// isEmployerSite() enforces that on the URL, whatever the search claims.
 //
 // Unlike workflows 1 and 2 there is no verification MODEL call: a second pass
 // over the same search results has nothing new to read. What there is, since
@@ -47,6 +51,66 @@ function normalizeUrl(url) {
   } catch {
     return "";
   }
+}
+
+// Hosts that are never the hiring company's own website. Two kinds, and the
+// second is the one worth being explicit about: a vacancy on
+// equinix.wd1.myworkdayjobs.com or boards.greenhouse.io/<company> is the
+// employer's own advert in the sense that the application lands on their desk,
+// but it is NOT their career page — it is recruitment software they rent, on
+// somebody else's domain, and the candidate can see that in the URL. The direct
+// group means the company's own site, so everything here is excluded from it.
+//
+// A blocklist, not an allowlist, because the employer's domain is whatever the
+// employer owns and cannot be enumerated. An unknown platform therefore slips
+// through as "direct" until it is named here; the search prompt is the first
+// line of defence and this is the backstop.
+const NOT_EMPLOYER_HOSTS = [
+  // Applicant tracking systems and hosted careers sites.
+  "greenhouse.io", "lever.co", "myworkdayjobs.com", "myworkdaysite.com", "workday.com",
+  "smartrecruiters.com", "teamtailor.com", "workable.com", "ashbyhq.com", "icims.com",
+  "jobvite.com", "bamboohr.com", "recruitee.com", "personio.de", "personio.com",
+  "breezy.hr", "pinpointhq.com", "jazzhr.com", "applytojob.com", "avature.net",
+  "phenompeople.com", "eightfold.ai", "csod.com", "cornerstoneondemand.com",
+  "brassring.com", "silkroad.com", "hirebridge.com", "catsone.com", "clearcompany.com",
+  "dayforcehcm.com", "ultipro.com", "paylocity.com", "paycomonline.net", "adp.com",
+  "rippling.com", "gohire.io", "occupop.com", "peoplehr.net", "tribepad.com",
+  "networxrecruitment.com", "jobtrain.co.uk", "eploy.co.uk", "vacancy-filler.co.uk",
+  "webrecruit.co.uk", "hireful.co.uk", "tal.net", "isolvedhire.com", "polymer.co",
+  "jobs.jobvite.com", "recruiterbox.com", "hrmdirect.com", "snaphunt.com",
+  // Boards, aggregators and professional networks.
+  "linkedin.com", "totaljobs.com", "reed.co.uk", "cv-library.co.uk", "jobserve.com",
+  "jobsite.co.uk", "cwjobs.co.uk", "technojobs.co.uk", "irishjobs.ie", "jobs.ie",
+  "simplyhired.com", "careerbuilder.com", "dice.com", "xing.com", "infojobs.net",
+  "welcometothejungle.com", "otta.com", "wellfound.com", "angel.co", "builtin.com",
+  "efinancialcareers.com", "jobtome.com", "jobrapido.com", "bebee.com", "recruit.net",
+  "learn4good.com", "hiring.cafe", "workinstartups.com", "jobbank.gc.ca", "jobs.ac.uk",
+  "datacenterdynamics.com", "glassdoor.com", "indeed.com",
+];
+
+// The ones with a domain per country (indeed.co.uk, glassdoor.ie, seek.com.au…),
+// plus the platforms whose host varies but whose brand does not.
+const NOT_EMPLOYER_PATTERNS = [
+  /(^|\.)indeed\./, /(^|\.)glassdoor\./, /(^|\.)monster\./, /(^|\.)ziprecruiter\./,
+  /(^|\.)adzuna\./, /(^|\.)jooble\./, /(^|\.)careerjet\./, /(^|\.)trovit\./,
+  /(^|\.)stepstone\./, /(^|\.)seek\.com/, /(^|\.)talent\.com/, /(^|\.)neuvoo\./,
+  /(^|\.)whatjobs\./, /(^|\.)jobstreet\./, /(^|\.)naukri\./, /(^|\.)oraclecloud\.com$/,
+  /(^|\.)successfactors\./, /(^|\.)sapsf\./, /(^|\.)taleo\./, /(^|\.)icims\./,
+  /(^|\.)greenhouse\./, /(^|\.)lever\.co$/, /(^|\.)myworkday/, /(^|\.)smartrecruiters\./,
+  /(^|\.)teamtailor\./, /(^|\.)workable\./, /(^|\.)ashbyhq\./, /(^|\.)jobs\.google\./,
+];
+
+// True when the URL is on a domain the hiring company itself owns — which is
+// everything left once the platforms and the boards are taken out.
+function isEmployerSite(url) {
+  let host;
+  try {
+    host = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return false;
+  }
+  if (NOT_EMPLOYER_HOSTS.some((d) => host === d || host.endsWith(`.${d}`))) return false;
+  return !NOT_EMPLOYER_PATTERNS.some((re) => re.test(host));
 }
 
 // A search results page, a board's category listing or a company homepage is a
@@ -180,15 +244,21 @@ export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o"
         source: str(job?.source),
         url,
         is_agency: isAgency,
-        // Which pass found it, and therefore which group it is shown under.
-        // Trusted over the model's own is_agency flag for grouping: the pass
-        // is a fact about where we looked, the flag is a judgement call.
-        source_type: pass.source,
+        // Which group it is shown under. The pass says where we looked, but the
+        // URL says whose site it is, and the URL wins: the direct group means
+        // the company's own career page, so an advert the direct pass found on
+        // a board or on rented recruitment software is reclassified here rather
+        // than taken on trust.
+        source_type: pass.source === "direct" && isEmployerSite(url) ? "direct" : "board",
       });
       if (++taken >= pass.want) break;
     }
   }
-  const candidates = [...byUrl.values()];
+  // With the board pass switched off, the only list the admin asked for is the
+  // company career pages, so a reclassified link has nowhere to go.
+  const candidates = [...byUrl.values()].filter(
+    (j) => includeAgencies || j.source_type === "direct"
+  );
 
   // 4) Follow every link. A 404, a "no longer accepting applications" banner on
   // an otherwise healthy 200, or a bounce to the board's search page all mean

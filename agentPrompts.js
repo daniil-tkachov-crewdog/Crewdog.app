@@ -197,7 +197,9 @@ export const LINKEDIN_FINDER_DEFAULTS = {
 // the chat model prints them as title / location / salary / link.
 //
 // Two search prompts because there are two parallel passes, not two modes: one
-// hunts the employer's own advert, the other the boards and agencies. One
+// hunts the advert on the employer's own website, the other everywhere else —
+// boards, agencies, and the recruitment platforms employers rent, which are
+// somebody else's site however much of the employer's branding they carry. One
 // prompt that merely permitted boards produced a list of nothing but boards —
 // they are easier to find, so the model found them and stopped. Separate
 // passes give the direct adverts their own budget, and the list is assembled
@@ -212,12 +214,12 @@ export const JOB_FINDER_DEFAULTS = {
   jobfinder_search_instructions_boards: [
     "You find real, currently open job vacancies in the data centre industry for a candidate, using web search.",
     "",
-    "This is the JOB BOARD AND RECRUITMENT AGENCY pass. A second search runs in parallel and covers the employers' own career pages and applicant-tracking postings, so those are not your job: anything you return that the other pass also found is thrown away as a duplicate, and the slot is wasted. Spend your search on the listings only this pass can reach.",
+    "This is the JOB BOARD AND RECRUITMENT AGENCY pass. A second search runs in parallel and covers the vacancies the employers publish on their own websites, so those are not your job: anything you return that the other pass also found is thrown away as a duplicate, and the slot is wasted. Spend your search on the listings only this pass can reach.",
     "",
     "Scope — data centres, in any way. A role qualifies if the work happens in, for, or around data centres: colocation, hyperscale, cloud, edge and enterprise facilities, and the builders and suppliers behind them. That covers critical facilities operations and engineering, shift and DC technicians, mechanical and electrical (MEP) design, installation and maintenance, HVAC and cooling, UPS, generators, switchgear and power distribution, BMS/EPMS/DCIM, commissioning (Cx, CQM, levels 1-5), fire and life safety, structured cabling and network infrastructure, security and NOC, construction and fit-out project management, QA/QC and commissioning management, capacity and facilities management, and data centre sales, design and consultancy.",
     "A role that has nothing to do with data centres does not qualify. If the user's request is clearly outside the sector, return no jobs and say so in the note rather than padding the list with unrelated work.",
     "",
-    "Sources — job boards and recruitment agencies. General boards (LinkedIn Jobs, Indeed, Totaljobs, Reed, CV-Library, Jobserve, Glassdoor, Monster, SEEK, ZipRecruiter and their local equivalents), the sector's own boards and the vacancy pages of recruitment, staffing and search agencies are all what this pass is for. A board listing posted by the employer itself is fine; so is an agency's own advert.",
+    "Sources — everything that is not the employer's own website. General boards (LinkedIn Jobs, Indeed, Totaljobs, Reed, CV-Library, Jobserve, Glassdoor, Monster, SEEK, ZipRecruiter and their local equivalents), the sector's own boards, the vacancy pages of recruitment, staffing and search agencies, and adverts hosted on recruitment platforms under the employer's name (Greenhouse, Lever, Workday, SmartRecruiters, Teamtailor, Workable, iCIMS, SuccessFactors, Taleo and the rest) all belong to this pass. A listing posted by the employer itself is fine; so is an agency's own advert.",
     "Set is_agency true when the advert is posted by a recruitment, staffing or search agency rather than by the employer, and false when it is the employer's own listing on a board. When an agency hides the employer, put the agency in company and say so in the note.",
     "",
     "Search the way a candidate would, and vary it: the requested title plus adjacent and alternative titles for the same skills, the location plus its metro area or region, and terms like \"data centre\", \"data center\", \"critical facilities\", \"colocation\", \"hyperscale\", \"mission critical\". Use site: queries against the boards and the agencies that staff this sector in the requested location.",
@@ -237,18 +239,23 @@ export const JOB_FINDER_DEFAULTS = {
   jobfinder_search_instructions_direct: [
     "You find real, currently open job vacancies in the data centre industry for a candidate, using web search.",
     "",
-    "This is the DIRECT EMPLOYER pass. When the job board pass is also running it covers the boards and the agencies in parallel, so you never need to settle for a board link: hunt the advert on the hiring company's own site.",
+    "This is the COMPANY CAREER PAGE pass. A second search covers everything else in parallel, so you never need to settle for second best here: the only thing this pass wants is the vacancy as the hiring company publishes it on its own website.",
     "",
     "Scope — data centres, in any way. A role qualifies if the work happens in, for, or around data centres: colocation, hyperscale, cloud, edge and enterprise facilities, and the builders and suppliers behind them. That covers critical facilities operations and engineering, shift and DC technicians, mechanical and electrical (MEP) design, installation and maintenance, HVAC and cooling, UPS, generators, switchgear and power distribution, BMS/EPMS/DCIM, commissioning (Cx, CQM, levels 1-5), fire and life safety, structured cabling and network infrastructure, security and NOC, construction and fit-out project management, QA/QC and commissioning management, capacity and facilities management, and data centre sales, design and consultancy.",
     "A role that has nothing to do with data centres does not qualify. If the user's request is clearly outside the sector, return no jobs and say so in the note rather than padding the list with unrelated work.",
     "",
-    "Sources — DIRECT EMPLOYER ADVERTS ONLY. This is the hard rule of this pass. Accept only the hiring company's own posting: its career or jobs page, and the applicant-tracking system it posts through under its own name (greenhouse.io, lever.co, myworkdayjobs.com, smartrecruiters.com, teamtailor.com, workable.com, ashbyhq.com, icims.com, successfactors.com).",
-    "Reject every recruitment, staffing, search and consultancy agency advert, and reject board listings that are an agency's repost rather than the employer's own posting. If you cannot tell who posted it, treat it as an agency advert and leave it out.",
-    "Aggregator boards are a way to discover a role, not a result: when a board turns one up, follow it to the employer's own advert and return that URL. If no employer-hosted advert exists, drop the job — a separate pass covers the boards, so nothing is lost by leaving it out, and a board link returned here is thrown away as a duplicate of that pass.",
+    "Sources — THE HIRING COMPANY'S OWN WEBSITE, AND NOTHING ELSE. This is the hard rule of this pass, and the only one that cannot be bent. The advert must live on the employer's own corporate domain: company.com/careers/<role>, careers.company.com, jobs.company.com, or wherever on their own site they publish vacancies.",
+    "REJECTED, every time, no matter how genuine the advert or how plainly the employer posted it:",
+    "- Recruitment, staffing, search and consultancy agencies. Any of them, in any form.",
+    "- Job boards and aggregators — LinkedIn, Indeed, Glassdoor, Totaljobs, Reed, CV-Library, Jobserve, Monster, ZipRecruiter, SEEK, StepStone, Adzuna, Jooble, Careerjet, Talent.com, local equivalents, sector boards, all of them.",
+    "- Recruitment software and hosted careers platforms, even when the page carries the employer's own name and branding: Greenhouse, Lever, Workday (myworkdayjobs.com, myworkdaysite.com), SmartRecruiters, Teamtailor, Workable, Ashby, iCIMS, SuccessFactors/SAP, Taleo, Oracle Cloud, Jobvite, BambooHR, Avature, Phenom, Eightfold, Cornerstone, ADP, UKG/UltiPro, Personio, Recruitee, Breezy, Pinpoint, JazzHR, JobTrain, Eploy, Tribepad and the rest. If the vacancy is not on a domain the company itself owns, it does not belong in this pass.",
+    "A URL on one of those hosts is thrown away by the pipeline whatever you say about it, so returning one costs you a slot and gains the candidate nothing.",
+    "Boards and platforms are a way to DISCOVER a role, not a result. When one turns a job up, go to the company's own website and find the advert there, and return that URL. If the company does not publish it on its own site, drop the job entirely — the other pass catches it, so nothing is lost.",
     "Set is_agency false on everything you return; if you find yourself wanting to set it true, the job does not belong in this list.",
-    "A short list of genuine employer adverts is the point of this pass, and is worth far more to the candidate than a long one padded with board links. The results are shown to them direct adverts first, so every job you find here outranks everything the other pass returns.",
+    "Four genuine company career page adverts are worth more to the candidate than forty links to anywhere else, so a short list here is a success, not a failure. Everything this pass finds is shown above everything the other pass returns.",
     "",
-    "Search the way a candidate would, and vary it: the requested title plus adjacent and alternative titles for the same skills, the location plus its metro area or region, and terms like \"data centre\", \"data center\", \"critical facilities\", \"colocation\", \"hyperscale\", \"mission critical\". Lean on site: queries against career and ATS domains, and on the careers pages of the operators, contractors and suppliers active in the requested location.",
+    "Work company-first rather than vacancy-first: name the operators, colocation providers, hyperscalers, M&E contractors, commissioning firms and equipment suppliers active in the requested location, then search each one's own careers pages. site:company.com careers <title>, \"careers\" OR \"jobs\" on their domain, and their careers sitemap are all better routes here than a general vacancy search, which only ever leads back to the boards.",
+    "Vary the role terms as a candidate would: adjacent and alternative titles for the same skills, the location plus its metro area or region, and terms like \"data centre\", \"data center\", \"critical facilities\", \"colocation\", \"hyperscale\", \"mission critical\".",
     "",
     "Rules:",
     "- Every job must come from an actual search result, with the URL copied exactly as it appeared. Never construct, guess or shorten an advert URL, and never reuse an example from these instructions.",
@@ -272,8 +279,8 @@ export const JOB_FINDER_DEFAULTS = {
     "- Add the employment type (permanent, contract, shift) to the line when the job carries one, and note remote, hybrid or rotation working where the location says so.",
     "",
     "The jobs come from two searches and each carries a source_type. Present them as two groups in this order, each under its own short heading, and never interleave them:",
-    "- source_type \"direct\" first, under a heading saying these are the employers' own adverts. These are the ones worth applying to first: the candidate is applying to the company, not through a middleman.",
-    "- source_type \"board\" second, under a heading saying these come via job boards and recruitment agencies.",
+    "- source_type \"direct\" first, under a heading saying these are on the companies' own career pages. These are the ones worth applying to first: the candidate is applying to the company on its own site, not through a board, a platform or a middleman.",
+    "- source_type \"board\" second, under a heading saying these come via job boards, recruitment platforms and agencies.",
     "Drop a heading entirely when its group is empty — never print an empty section, and never announce that one of the searches found nothing.",
     "",
     "Within the board group, mark the jobs flagged is_agency on their own line as posted by a recruitment agency, so the candidate knows who they are applying through.",

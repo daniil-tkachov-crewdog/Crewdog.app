@@ -623,13 +623,14 @@ const PlaceRow: React.FC<{
 
 // --- Group panel --------------------------------------------------------------
 
-// Jobs arrive in two blocks: the employers' own adverts, then the boards and
-// agencies. The order already carries that, but the candidate needs to see
-// which is which — applying to the company directly is the better route — so
-// each block gets a heading, and only when both blocks are actually there.
+// Jobs arrive in two blocks: the ones on the company's own website, then
+// everything else — boards, agencies, and the recruitment platforms employers
+// rent. The order already carries that, but the candidate needs to see which is
+// which, since applying on the company's own site means no middleman, so each
+// block gets a heading — and only when both blocks are actually there.
 const JOB_SECTIONS = {
-  direct: "Direct from employers",
-  board: "Via job boards & agencies",
+  direct: "Company career pages",
+  board: "Via job boards, platforms & agencies",
 } as const;
 
 const jobSection = (j: JobResult) => (j.source_type === "board" ? "board" : "direct");

@@ -12,9 +12,9 @@ type Props = {
 };
 
 // Workflow 3: the other two find people, this one finds vacancies. A candidate
-// asks for a data centre job, two searches run in parallel — the employers' own
-// adverts and the boards and agencies — and the results are shown direct-first
-// as title / location / salary / link.
+// asks for a data centre job, two searches run in parallel — the companies' own
+// career pages, and everything else — and the results are shown career-pages
+// first as title / location / salary / link.
 const JobFinderTab = ({ enabled, setEnabled, cfg, set }: Props) => {
   const includeAgencies = cfg.jobfinder_include_agencies ?? D.jobfinder_include_agencies;
   const verifyLinks = cfg.jobfinder_verify_links ?? D.jobfinder_verify_links;
@@ -39,12 +39,12 @@ const JobFinderTab = ({ enabled, setEnabled, cfg, set }: Props) => {
       <p className="text-xs text-muted-foreground">
         When on, asking the chatbot to find you a job triggers the pipeline: what the user is
         looking for (+ location and any extras they mention) → two web searches at once, one for
-        the employers' own adverts and one for job boards and agencies → duplicates and dead
-        links dropped → a list showing each job's title, location, salary and a link to the
-        advert. Direct employer adverts are always shown first, as their own group, and board
-        links only fill the slots left over. The scope is the data centre industry in any form;
-        the chatbot turns down off-sector requests rather than running a search. Location is
-        optional — a user who has not named a city still gets results.
+        the vacancy on the hiring company's own website and one for job boards and agencies →
+        duplicates and dead links dropped → a list showing each job's title, location, salary
+        and a link to the advert. Company career pages are always shown first, as their own
+        group, and everything else only fills the slots left over. The scope is the data centre
+        industry in any form; the chatbot turns down off-sector requests rather than running a
+        search. Location is optional — a user who has not named a city still gets results.
       </p>
 
       <section className="space-y-2">
@@ -57,8 +57,8 @@ const JobFinderTab = ({ enabled, setEnabled, cfg, set }: Props) => {
         </div>
         <p className="text-xs text-muted-foreground">
           {includeAgencies
-            ? "On — both searches run. The direct pass hunts the hiring company's own career or ATS advert; the board pass covers job boards and recruitment agency listings. The two are merged with the direct adverts on top, so board links only ever fill the slots the direct pass could not. Costs one extra search per run."
-            : "Off — only the direct pass runs: the hiring company's own career or ATS advert, with board listings and agency reposts rejected. Shorter lists, no middlemen, half the search cost."}
+            ? "On — both searches run. The first hunts the vacancy on the hiring company's own website; the second covers job boards, recruitment agencies, and adverts hosted on rented recruitment software (Greenhouse, Workday, Lever and the like — the employer's advert, but not their career page). The two are merged with the career pages on top, so the rest only ever fills the slots they could not. Costs one extra search per run."
+            : "Off — only the career page search runs, and only vacancies on a domain the company itself owns are shown. A Greenhouse, Workday or LinkedIn link found along the way is discarded, not demoted. Short lists, no middlemen, half the search cost."}
         </p>
       </section>
 
@@ -126,7 +126,7 @@ const JobFinderTab = ({ enabled, setEnabled, cfg, set }: Props) => {
 
       <section className="space-y-2">
         <label className="text-sm font-medium">
-          Search prompt — direct employer adverts {liveNote(true)}
+          Search prompt — company career pages {liveNote(true)}
         </label>
         <Textarea
           value={
@@ -137,14 +137,16 @@ const JobFinderTab = ({ enabled, setEnabled, cfg, set }: Props) => {
           className="font-mono text-sm"
         />
         <p className="text-xs text-muted-foreground">
-          The pass that always runs, whatever the switch says. Its results are the ones shown
-          first.
+          The pass that always runs, whatever the switch says, and its results are the ones shown
+          first. “Company career page” means a domain the employer owns — boards, LinkedIn and
+          hosted recruitment platforms are rejected here by the pipeline itself, whatever the
+          prompt or the search says, so a link on one of them never reaches this group.
         </p>
       </section>
 
       <section className="space-y-2">
         <label className="text-sm font-medium">
-          Search prompt — job boards &amp; agencies {liveNote(includeAgencies)}
+          Search prompt — boards, platforms &amp; agencies {liveNote(includeAgencies)}
         </label>
         <Textarea
           value={
@@ -156,7 +158,8 @@ const JobFinderTab = ({ enabled, setEnabled, cfg, set }: Props) => {
         />
         <p className="text-xs text-muted-foreground">
           Runs alongside the pass above only while “Show recruitment agencies?” is on, and fills
-          whatever slots the direct adverts leave.
+          whatever slots the career pages leave. Everything that is not the company's own site
+          belongs here, hosted ATS adverts included.
         </p>
       </section>
 

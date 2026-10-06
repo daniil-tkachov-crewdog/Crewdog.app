@@ -133,11 +133,11 @@ function jobs(args, result) {
           "Sources",
           [
             nDirect && `${nDirect} direct from employers`,
-            nBoard && `${nBoard} via job boards or agencies`,
+            nBoard && `${nBoard} via boards, platforms or agencies`,
           ].filter(Boolean).join(", ") ||
             (result?.include_agencies === false
-              ? "employer career pages only"
-              : "employer career pages, job boards and agencies"),
+              ? "company career pages only"
+              : "company career pages, boards and agencies"),
         ],
         linkStep(result?.link_check, "expired or closed"),
       ].filter(Boolean),
