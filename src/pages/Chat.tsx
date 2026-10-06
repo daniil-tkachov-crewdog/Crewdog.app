@@ -798,7 +798,7 @@ const Chat: React.FC = () => {
               <div className="mt-24 flex flex-col items-center text-center">
                 <Wordmark className="mb-6" />
                 <h1 className="text-[32px] font-semibold tracking-[-0.03em]">
-                  How can I help you today?
+                  Who's really hiring in data centres?
                 </h1>
                 <p className="mt-3 max-w-[520px] text-[14.5px] leading-[1.6] text-[#6E6B64] dark:text-[#96938C]">
                   Paste a data centre job description and CrewDog DC finds the
