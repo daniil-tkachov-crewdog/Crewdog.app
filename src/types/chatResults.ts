@@ -69,3 +69,7 @@ export type ResultGroup =
 
 // Where the cards sit in the reply text; the model writes it on its own line.
 export const CARDS_MARKER = "::cards::";
+
+// Where the model's suggested next prompts sit, after the reply text. Each line
+// below the marker is one suggestion, rendered as a button under the answer.
+export const SUGGESTIONS_MARKER = "::next::";

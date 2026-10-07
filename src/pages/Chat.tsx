@@ -45,6 +45,8 @@ type Message = {
   durationMs?: number;
   // Workflow results rendered as cards where the reply's ::cards:: marker sits.
   results?: ResultGroup[];
+  // Next prompts the model suggested, shown as buttons under the answer.
+  suggestions?: string[];
 };
 
 // The reply as plain text, with the cards written out where they sat. Used for
@@ -61,13 +63,41 @@ const withCardsAsText = (m: Message) => {
 const REPLY_TEXT_CLS =
   "whitespace-pre-wrap text-[16px] leading-[1.75] text-[#25231F] [text-wrap:pretty] dark:text-[#DEDCD7]";
 
+// The next steps the model suggested, as buttons. Shown under the latest answer
+// only: older ones belong to a turn the conversation has already moved past.
+const Suggestions: React.FC<{
+  items: string[];
+  onPick: (prompt: string) => void;
+  disabled: boolean;
+}> = ({ items, onPick, disabled }) => {
+  if (!items.length) return null;
+  return (
+    <div className="mt-1 flex flex-col items-start gap-2 border-t border-[rgba(26,25,23,0.1)] pt-3 dark:border-[rgba(255,255,255,0.1)]">
+      {items.map((s) => (
+        <button
+          key={s}
+          type="button"
+          onClick={() => onPick(s)}
+          disabled={disabled}
+          className="rounded-full border border-[rgba(26,25,23,0.16)] px-3.5 py-1.5 text-left text-[13.5px] leading-[1.4] text-[#25231F] transition hover:border-[rgba(26,25,23,0.3)] hover:bg-[rgba(26,25,23,0.04)] disabled:pointer-events-none disabled:opacity-50 dark:border-[rgba(255,255,255,0.14)] dark:text-[#DEDCD7] dark:hover:border-[rgba(255,255,255,0.28)] dark:hover:bg-[rgba(255,255,255,0.06)]"
+        >
+          {s}
+        </button>
+      ))}
+    </div>
+  );
+};
+
 // Claude-style answer: what was searched, a short intro, the result cards,
-// then the follow-up question.
+// then the suggested next steps as buttons.
 const AssistantBody: React.FC<{
   message: Message;
   onFollowUp: (prompt: string) => void;
   contactLookup: ContactLookupCtx;
-}> = ({ message, onFollowUp, contactLookup }) => {
+  // Only the latest answer offers its next steps; earlier ones are spent.
+  showSuggestions: boolean;
+  busy: boolean;
+}> = ({ message, onFollowUp, contactLookup, showSuggestions, busy }) => {
   const results = message.results ?? [];
   const [before, ...rest] = message.content.split(CARDS_MARKER);
   const intro = before.trim();
@@ -87,6 +117,13 @@ const AssistantBody: React.FC<{
         />
       ))}
       {outro && <div className={REPLY_TEXT_CLS}>{renderRichText(outro)}</div>}
+      {showSuggestions && (
+        <Suggestions
+          items={message.suggestions ?? []}
+          onPick={onFollowUp}
+          disabled={busy}
+        />
+      )}
     </div>
   );
 };
@@ -221,10 +258,12 @@ const CopyButton: React.FC<{
 // Shown on an empty chat so a first-time visitor can see what CrewDog does by
 // clicking rather than by reading a pitch.
 const STARTER_PROMPTS = [
-  "Who is the real data centre employer behind this job ad?",
-  "Find the hiring manager for a data centre role I'm applying to",
+  "Find data centre technician jobs in Dublin",
+  "Find data centre candidates in London who are open to work",
+  "Find the hiring manager for a critical facilities role in Frankfurt",
   "Find me a room to rent near the Slough data centres",
-  "Find data centre technicians in London who are open to work right now",
+  "Find DC shift engineers with HV experience in Amsterdam",
+  "Who is hiring data centre commissioning engineers in the Nordics?",
 ];
 
 const Chat: React.FC = () => {
@@ -471,6 +510,9 @@ const Chat: React.FC = () => {
       const results: ResultGroup[] = Array.isArray(data?.results)
         ? data.results
         : [];
+      const suggestions: string[] = Array.isArray(data?.suggestions)
+        ? data.suggestions.map((s: unknown) => String(s)).filter(Boolean)
+        : [];
       if (isAuthed && user && data?.usage) {
         void logTokenUsage(user.id, data?.model ?? settings.chat_model, data.usage);
       }
@@ -480,6 +522,7 @@ const Chat: React.FC = () => {
         content: reply,
         durationMs: Date.now() - startedAt,
         results: results.length ? results : undefined,
+        suggestions: suggestions.length ? suggestions : undefined,
       };
       updateConversation(convId, (c) => ({
         ...c,
@@ -798,12 +841,12 @@ const Chat: React.FC = () => {
               <div className="mt-24 flex flex-col items-center text-center">
                 <Wordmark className="mb-6" />
                 <h1 className="text-[32px] font-semibold tracking-[-0.03em]">
-                  Let's find your next data centre role
+                  Data centre jobs, people and places to stay
                 </h1>
                 <p className="mt-3 max-w-[520px] text-[14.5px] leading-[1.6] text-[#6E6B64] dark:text-[#96938C]">
-                  Paste a data centre job description and CrewDog DC finds the
-                  real employer behind it, plus the people worth contacting
-                  direct on LinkedIn — or just ask below.
+                  Tell CrewDog DC what you're looking for. Open roles, the
+                  people hiring for them, candidates for a vacancy, or somewhere
+                  to live near the site.
                 </p>
 
                 <div className="mt-7 grid w-full max-w-[560px] grid-cols-1 gap-2 sm:grid-cols-2">
@@ -853,6 +896,8 @@ const Chat: React.FC = () => {
                           message={m}
                           onFollowUp={send}
                           contactLookup={contactLookup}
+                          showSuggestions={i === active.messages.length - 1 && !thinking}
+                          busy={thinking}
                         />
                       )}
                     </div>

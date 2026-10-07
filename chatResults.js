@@ -10,12 +10,31 @@ const list = (v) => (Array.isArray(v) ? v.map(str).filter(Boolean) : []);
 // the app swaps it for the cards and strips it everywhere else.
 export const CARDS_MARKER = "::cards::";
 
+// Where the model's suggested next prompts sit, after the reply text (see
+// src/types/chatResults.ts for the client-side copy).
+export const SUGGESTIONS_MARKER = "::next::";
+
+// Appended to the admin-set system prompt. Every reply ends with a short list of
+// next things the user could ask; the app renders them as buttons, so the prose
+// itself must not end on a question.
+export const SUGGESTIONS_CONTRACT = [
+  "NEXT STEPS",
+  "",
+  "Never end your reply by asking the user what they would like to do next, and never offer options in the prose. The app shows the next steps as buttons instead.",
+  `Instead, end every reply with the marker ${SUGGESTIONS_MARKER} alone on its own line, followed by two to four suggested next prompts, one per line, nothing else after them.`,
+  "Write each suggestion as the user would type it, in the first person, under about 60 characters, with no numbering, bullets or quotes.",
+  "Make them concrete and specific to what was just discussed \u2014 reuse the actual role, company, people or town in question rather than writing a generic prompt.",
+  "Cover genuinely different next moves across the things Crewdog can do: find jobs, find the people hiring for a role, find candidates for a vacancy, and find somewhere to live near a site.",
+  "After a job search, one of the suggestions should offer to find accommodation near those jobs.",
+  "The only time you may ask the user a direct question in the prose is when a search genuinely cannot run without an answer from them (for example the area or the kind of place they want to live in). Even then, still end with the marker and suggestions.",
+].join("\n");
+
 // Replaces the workflow's own presentation prompt whenever its results are
 // shown as cards, so the reply does not print the same list twice.
 export const CARDS_PRESENTATION = [
   "The app shows these results to the user as interactive cards, each with its details and a button to open the link. Do NOT list the results, their links or their details yourself.",
   "",
-  `Write one or two short sentences that sum up what was found (how many, and what stands out), then the marker ${CARDS_MARKER} alone on its own line, then one short follow-up question offering a useful next step.`,
+  `Write one or two short sentences that sum up what was found (how many, and what stands out), then the marker ${CARDS_MARKER} alone on its own line, and stop. Do not ask a follow-up question in the text \u2014 the app offers the next steps as buttons.`,
   "Use **bold** sparingly for the key number. No headings, no bullet lists, no URLs.",
   "When the results are empty, write no marker: say in one line that nothing was found and suggest which criterion to relax.",
 ].join("\n");
@@ -188,4 +207,20 @@ export function toCardGroup(name, args, result) {
     group = places(result);
   }
   return group && group.items.length ? group : null;
+}
+
+// Splits a reply into its prose and the suggested next prompts the model wrote
+// after the marker. A reply without the marker simply yields no suggestions.
+export function splitSuggestions(reply) {
+  const text = String(reply ?? "");
+  const at = text.indexOf(SUGGESTIONS_MARKER);
+  if (at === -1) return { text: text.trim(), suggestions: [] };
+  const suggestions = text
+    .slice(at + SUGGESTIONS_MARKER.length)
+    .split("\n")
+    .map((l) => l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, "").trim())
+    .map((l) => l.replace(/^["'“‘]|["'”’]$/g, "").trim())
+    .filter(Boolean)
+    .slice(0, 4);
+  return { text: text.slice(0, at).trim(), suggestions };
 }

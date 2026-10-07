@@ -16,7 +16,12 @@ import {
 } from "./contactLookups.js";
 import { runJobFinder } from "./jobFinder.js";
 import { runAccommodationFinder } from "./accommodationFinder.js";
-import { toCardGroup, CARDS_PRESENTATION } from "./chatResults.js";
+import {
+  toCardGroup,
+  CARDS_PRESENTATION,
+  SUGGESTIONS_CONTRACT,
+  splitSuggestions,
+} from "./chatResults.js";
 
 // Function tools the chat model can call, by name. Each takes
 // (openai, args, config, model) and resolves to { result, usage }.
@@ -485,10 +490,14 @@ app.post("/api/chat", async (req, res) => {
       });
     }
 
-    const instructions =
+    const baseInstructions =
       (typeof sysOverride === "string" && sysOverride.trim()) ||
       systemPrompt() ||
-      undefined;
+      "";
+    // The next steps are offered as buttons under the answer, not as a question
+    // in the prose, so the contract for them is appended to whatever system
+    // prompt the admin has set rather than living in the editable text.
+    const instructions = `${baseInstructions}\n\n${SUGGESTIONS_CONTRACT}`.trim();
     const addition = typeof userPromptAddition === "string" ? userPromptAddition.trim() : "";
 
     const input = messages.map((m) => ({
@@ -575,9 +584,16 @@ app.post("/api/chat", async (req, res) => {
     // pipeline alike, since `usage` accumulates both.
     const committed = await recordUsage(req.accessToken, plan, usage);
 
+    // The suggestions ride back in the reply text; split them out so the page
+    // gets buttons and the stored message stays clean prose.
+    const { text: replyText, suggestions } = splitSuggestions(
+      response.output_text ?? ""
+    );
+
     log(200);
     res.json({
-      reply: response.output_text ?? "",
+      reply: replyText,
+      suggestions,
       results,
       model: activeModel,
       usage,
