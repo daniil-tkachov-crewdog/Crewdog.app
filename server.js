@@ -20,6 +20,7 @@ import {
   toCardGroup,
   CARDS_PRESENTATION,
   SUGGESTIONS_CONTRACT,
+  SUGGESTIONS_TAIL,
   splitSuggestions,
 } from "./chatResults.js";
 
@@ -559,7 +560,13 @@ app.post("/api/chat", async (req, res) => {
           // Shown as cards, the list must not be printed again in the text.
           const group = toCardGroup(call.name, args, result);
           if (group) results.push(group);
-          out = JSON.stringify(group ? { ...result, presentation: CARDS_PRESENTATION } : result);
+          // Whatever tells the model how to present this result is also what
+          // tells it to stop writing, so the suggestions exemption is pinned to
+          // the end of it rather than left in the system prompt to be overruled.
+          const presentation = `${
+            group ? CARDS_PRESENTATION : result?.presentation ?? ""
+          }\n\n${SUGGESTIONS_TAIL}`.trim();
+          out = JSON.stringify({ ...result, presentation });
         } catch (e) {
           agentCalls.push({ tool: call.name, error: String(e?.message || e).slice(0, 300) });
           out = JSON.stringify({ error: String(e?.message || e) });

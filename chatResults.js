@@ -34,7 +34,7 @@ export const SUGGESTIONS_CONTRACT = [
 export const CARDS_PRESENTATION = [
   "The app shows these results to the user as interactive cards, each with its details and a button to open the link. Do NOT list the results, their links or their details yourself.",
   "",
-  `Write one or two short sentences that sum up what was found (how many, and what stands out), then the marker ${CARDS_MARKER} alone on its own line, and stop. Do not ask a follow-up question in the text \u2014 the app offers the next steps as buttons.`,
+  `Write one or two short sentences that sum up what was found (how many, and what stands out), then the marker ${CARDS_MARKER} alone on its own line. Do not ask a follow-up question in the text \u2014 the app offers the next steps as buttons.`,
   "Use **bold** sparingly for the key number. No headings, no bullet lists, no URLs.",
   "When the results are empty, write no marker: say in one line that nothing was found and suggest which criterion to relax.",
 ].join("\n");
@@ -211,6 +211,21 @@ export function toCardGroup(name, args, result) {
 
 // Splits a reply into its prose and the suggested next prompts the model wrote
 // after the marker. A reply without the marker simply yields no suggestions.
+// Appended to whichever presentation instruction rides back with a tool result.
+//
+// The system prompt alone is not enough here: every presentation instruction
+// ends by telling the model to stop ("no closing summary", "no closing sales
+// pitch"), and a tool output is both later in the context and more specific
+// than the system prompt, so the model obeys it and never writes the marker.
+// The exemption has to travel with the instruction it is an exemption to.
+export const SUGGESTIONS_TAIL = [
+  `Last of all, after everything above, end your reply with the marker ${SUGGESTIONS_MARKER} alone on its own line, followed by two to four suggested next prompts, one per line, and nothing after them.`,
+  "This is REQUIRED, and it overrides anything above telling you to write no closing line, no closing summary or no closing sales pitch. Those rules are about prose; the marker and its lines are not prose. The app strips them out of the message and renders them as buttons, so the user never reads them as text.",
+  "Write each one as the user would type it, in the first person, under about 60 characters, no numbering, bullets or quotes.",
+  "Make them specific to what was just found \u2014 use the actual roles, companies, people or towns in the results, not generic phrasing.",
+  "Vary what they offer across what Crewdog does: find jobs, find the people hiring for a role, find candidates for a vacancy, find somewhere to live near a site. After a job search, one of them should offer to find accommodation near those jobs.",
+].join("\n");
+
 export function splitSuggestions(reply) {
   const text = String(reply ?? "");
   const at = text.indexOf(SUGGESTIONS_MARKER);
