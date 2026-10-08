@@ -571,8 +571,14 @@ app.post("/api/chat", async (req, res) => {
         });
       }
 
+      // `instructions` is NOT inherited through previous_response_id — the API
+      // drops it so a caller can swap the system message per turn. Omitting it
+      // here ran every tool-using reply, which is the reply the user actually
+      // reads, with no system prompt at all: no industry scope, no presentation
+      // rules, no suggested next steps. It has to be resent on every hop.
       response = await openai.responses.create({
         model: activeModel,
+        instructions,
         previous_response_id: response.id,
         input: toolOutputs,
         tools: tools.length ? tools : undefined,
