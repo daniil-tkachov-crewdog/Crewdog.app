@@ -1,34 +1,20 @@
 // Global app configuration set by the admin (API tab).
 import { supabase } from "@/lib/supabase";
 
-// Workflow 1 ("Job description") keys are unprefixed; workflow 2
-// ("LinkedIn finder") keys carry a `finder_` prefix, workflow 3
-// ("Job finder") a `jobfinder_` one and workflow 4 ("Accommodation Finder") an
-// `accom_` one. All four live in the same
-// app_settings.agent_config JSON blob, edited from the AI Agent sub-tabs.
+// Workflow 1 ("Job description") keys are unprefixed; workflows 2 and 3 are one
+// prompt each, and workflow 4 ("Accommodation Finder") carries an `accom_`
+// prefix. All four live in the same app_settings.agent_config JSON blob, edited
+// from the AI Agent sub-tabs.
 export type AgentConfig = {
   max_contacts?: number;
   hr_roles?: string;
   extract_instructions?: string;
   verify_instructions?: string;
   search_instructions?: string;
-  finder_max_results?: number;
-  finder_min_confidence?: number;
-  finder_routes?: string[];
-  finder_signal_max_age_days?: number;
-  finder_search_instructions?: string;
-  finder_verify_instructions?: string;
-  finder_compress_instructions?: string;
-  finder_extra_factor_hints?: string;
-  // Workflow 3 ("Job finder") keys carry a `jobfinder_` prefix.
-  jobfinder_max_results?: number;
-  jobfinder_max_age_days?: number;
-  jobfinder_include_agencies?: boolean;
-  jobfinder_verify_links?: boolean;
-  jobfinder_expiry_phrases?: string;
-  jobfinder_search_instructions_boards?: string;
-  jobfinder_search_instructions_direct?: string;
-  jobfinder_compress_instructions?: string;
+  // Workflows 2 and 3 are one editable prompt each, re-injected on every
+  // message the chat model routes to them.
+  linkedin_finder_prompt?: string;
+  job_finder_prompt?: string;
   // Workflow 4 ("Accommodation Finder") keys carry an `accom_` prefix.
   accom_max_results?: number;
   accom_max_age_days?: number;

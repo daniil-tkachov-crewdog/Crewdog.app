@@ -49,27 +49,15 @@ function summarizeAgentCall(name, args, result) {
     row.found = result?.found_count ?? 0;
     row.returned = result?.places?.length ?? 0;
   } else if (name === "find_jobs") {
-    row.query = String(args?.query ?? "").slice(0, 120);
-    row.location = String(args?.location ?? "").slice(0, 120);
-    row.key_factors = (Array.isArray(args?.key_factors) ? args.key_factors : [])
-      .map((f) => String(f ?? "").slice(0, 80))
-      .slice(0, 8);
-    row.include_agencies = Boolean(result?.include_agencies);
+    row.request = String(args?.request ?? "").slice(0, 200);
     row.found = result?.found_count ?? 0;
     row.returned = result?.jobs?.length ?? 0;
     row.direct = result?.direct_count ?? 0;
     row.board = result?.board_count ?? 0;
   } else if (name === "find_linkedin_professionals") {
-    row.job_title = String(args?.job_title ?? "").slice(0, 120);
-    row.location = String(args?.location ?? "").slice(0, 120);
-    row.key_factors = (Array.isArray(args?.key_factors) ? args.key_factors : [])
-      .map((f) => String(f ?? "").slice(0, 80))
-      .slice(0, 8);
-    row.routes = Array.isArray(result?.routes) ? result.routes : [];
-    row.checked = result?.checked_count ?? 0;
-    row.returned = (result?.available?.length ?? 0) + (result?.others?.length ?? 0);
-    row.available = result?.available?.length ?? 0;
-    row.near_misses = result?.near_misses?.length ?? 0;
+    row.request = String(args?.request ?? "").slice(0, 200);
+    row.found = result?.found_count ?? 0;
+    row.returned = result?.people?.length ?? 0;
   } else {
     row.had_job_description = Boolean(String(args?.job_description ?? "").trim());
     row.company = String(result?.extracted?.company ?? "").slice(0, 120);
@@ -393,26 +381,17 @@ app.post("/api/chat", async (req, res) => {
         type: "function",
         name: "find_linkedin_professionals",
         description:
-          "Search LinkedIn for professionals matching a job title and location, verify each match, and return their profile links. Call this whenever the user asks to find people/professionals/candidates WITHOUT pasting a job description (e.g. 'find me senior nurses in Manchester'). Both job_title and location are required: if the user has not given one of them, ask them for it in your reply instead of calling this tool with a guess. Put EVERY further qualifier the user mentioned into key_factors — availability ('available to work', 'open to work', 'actively looking', 'free to start'), company, seniority, industry, skills, certifications, language, current vs past employer. Never drop a qualifier because it seems vague or hard to search for: the pipeline knows how to look for these and how to report the ones it could not confirm. It always returns people who are advertising that they are available alongside ordinary matches, so asking for availability sorts and labels the list rather than narrowing it.",
+          "Search LinkedIn for people matching what the user is looking for and return their profile links. Call this whenever the user asks to find people/professionals/candidates WITHOUT pasting a job description (e.g. 'find me senior nurses in Manchester'), and call it again on every follow-up about the same search ('none of these are good', 'find more', 'what about Leeds?'). The search gets this whole conversation, so it sees the context itself — just say in `request` what to look for now, in the user's own terms.",
         parameters: {
           type: "object",
           properties: {
-            job_title: {
+            request: {
               type: "string",
-              description: "The job title to search for, e.g. 'backend engineer'. Required.",
-            },
-            location: {
-              type: "string",
-              description: "The city, region or country to search in, e.g. 'Berlin'. Required.",
-            },
-            key_factors: {
-              type: "array",
-              items: { type: "string" },
               description:
-                "Any extra criteria the user gave, one per entry, e.g. ['Zalando', 'senior', 'fintech']. Empty when they gave none.",
+                "What to search for now, in the user's own words, including every qualifier they gave — title, location, seniority, company, skills, certifications, availability. e.g. 'safety engineers in London, open to work'.",
             },
           },
-          required: ["job_title", "location", "key_factors"],
+          required: ["request"],
           additionalProperties: false,
         },
       });
@@ -422,28 +401,17 @@ app.post("/api/chat", async (req, res) => {
         type: "function",
         name: "find_jobs",
         description:
-          "Search the web for currently open data centre job vacancies and return them with title, location, salary and a link to the advert. Call this whenever the user is looking for work FOR THEMSELVES — 'find me a job', 'any data centre jobs in Dublin?', 'what critical facilities roles are open?', 'I'm a shift technician looking for something new'. This is the opposite of the other two tools: find_linkedin_connections and find_linkedin_professionals find PEOPLE, this one finds VACANCIES. The scope is the data centre industry in any form (colocation, hyperscale, critical facilities, MEP, commissioning, cooling, power, DCIM, construction and fit-out, NOC and security, DC sales and design); if the user asks for work outside that sector, tell them Crewdog covers data centres rather than calling this tool. Only query is required — put the kind of role they want in it, and call the tool without a location when they have not named one instead of guessing a city.",
+          "Search the web for currently open data centre job vacancies and return them with title, location, salary and a link to the advert. Call this whenever the user is looking for work FOR THEMSELVES — 'find me a job', 'any data centre jobs in Dublin?', 'what critical facilities roles are open?' — and call it again on every follow-up about the same search ('any more?', 'something closer to Dublin'). This is the opposite of the other two tools: find_linkedin_connections and find_linkedin_professionals find PEOPLE, this one finds VACANCIES. The scope is the data centre industry in any form (colocation, hyperscale, critical facilities, MEP, commissioning, cooling, power, DCIM, construction and fit-out, NOC and security, DC sales and design); if the user asks for work outside that sector, tell them Crewdog covers data centres rather than calling this tool. The search gets this whole conversation, so it sees the context itself — just say in `request` what to look for now, in the user's own terms.",
         parameters: {
           type: "object",
           properties: {
-            query: {
+            request: {
               type: "string",
               description:
-                "What the user is looking for, in their terms, e.g. 'data centre shift technician' or 'mission critical commissioning manager'. Required.",
-            },
-            location: {
-              type: "string",
-              description:
-                "The city, region or country they want to work in, e.g. 'Dublin'. Empty string when they did not say — do not guess one.",
-            },
-            key_factors: {
-              type: "array",
-              items: { type: "string" },
-              description:
-                "Any further requirements they gave, one per entry, e.g. ['contract', 'nights', 'HV authorised', 'remote']. Empty when they gave none.",
+                "What to search for now, in the user's own words, including everything they asked for — the kind of role, the location if they named one, and any further requirements (contract, nights, HV authorised, remote). e.g. 'data centre shift technician in Dublin, contract'.",
             },
           },
-          required: ["query", "location", "key_factors"],
+          required: ["request"],
           additionalProperties: false,
         },
       });
@@ -550,7 +518,10 @@ app.post("/api/chat", async (req, res) => {
             openai,
             args,
             agent?.config ?? {},
-            activeModel
+            activeModel,
+            // The LinkedIn and job finders are one prompt re-injected per
+            // message, so they need the same conversation the chat model has.
+            { history: input }
           );
           usage.input_tokens += pu.input_tokens;
           usage.output_tokens += pu.output_tokens;
