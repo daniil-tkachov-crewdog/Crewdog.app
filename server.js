@@ -21,6 +21,7 @@ import {
   CARDS_PRESENTATION,
   SUGGESTIONS_CONTRACT,
   SUGGESTIONS_TAIL,
+  WORKFLOW_CONTRACT,
   splitSuggestions,
 } from "./chatResults.js";
 
@@ -351,8 +352,10 @@ app.post("/api/chat", async (req, res) => {
     const finderEnabled = !!agent?.linkedin_finder_enabled;
     const jobFinderEnabled = !!agent?.job_finder_enabled;
     const accomFinderEnabled = !!agent?.accommodation_finder_enabled;
+    const anyFinderEnabled =
+      agentEnabled || finderEnabled || jobFinderEnabled || accomFinderEnabled;
     loggedModel = activeModel;
-    loggedAgent = agentEnabled || finderEnabled || jobFinderEnabled || accomFinderEnabled;
+    loggedAgent = anyFinderEnabled;
 
     const tools = [];
     if (webSearch) tools.push({ type: "web_search" });
@@ -381,7 +384,7 @@ app.post("/api/chat", async (req, res) => {
         type: "function",
         name: "find_linkedin_professionals",
         description:
-          "Search LinkedIn for people matching what the user is looking for and return their profile links. Call this whenever the user asks to find people/professionals/candidates WITHOUT pasting a job description (e.g. 'find me senior nurses in Manchester'), and call it again on every follow-up about the same search ('none of these are good', 'find more', 'what about Leeds?'). The search gets this whole conversation, so it sees the context itself — just say in `request` what to look for now, in the user's own terms.",
+          "Search LinkedIn for people matching what the user is looking for and return their profile links. Call this whenever the user asks to find people/professionals/candidates WITHOUT pasting a job description (e.g. 'find me senior nurses in Manchester'), and call it again on every follow-up about the same search. A complaint about the last set of people is a new search, not a conversation: 'find more', 'none of these are good', 'don't repeat yourself', 'what about Leeds?', 'only senior ones' all mean call this tool again, carrying the earlier criteria over. Never list people from earlier in this conversation instead of calling it — the search gets the whole conversation, sees who it already showed, and will not repeat them.",
         parameters: {
           type: "object",
           properties: {
@@ -401,7 +404,7 @@ app.post("/api/chat", async (req, res) => {
         type: "function",
         name: "find_jobs",
         description:
-          "Search the web for currently open data centre job vacancies and return them with title, location, salary and a link to the advert. Call this whenever the user is looking for work FOR THEMSELVES — 'find me a job', 'any data centre jobs in Dublin?', 'what critical facilities roles are open?' — and call it again on every follow-up about the same search ('any more?', 'something closer to Dublin'). This is the opposite of the other two tools: find_linkedin_connections and find_linkedin_professionals find PEOPLE, this one finds VACANCIES. The scope is the data centre industry in any form (colocation, hyperscale, critical facilities, MEP, commissioning, cooling, power, DCIM, construction and fit-out, NOC and security, DC sales and design); if the user asks for work outside that sector, tell them Crewdog covers data centres rather than calling this tool. The search gets this whole conversation, so it sees the context itself — just say in `request` what to look for now, in the user's own terms.",
+          "Search the web for currently open data centre job vacancies and return them with title, location, salary and a link to the advert. Call this whenever the user is looking for work FOR THEMSELVES — 'find me a job', 'any data centre jobs in Dublin?', 'what critical facilities roles are open?' — and call it again on every follow-up about the same search. A complaint about the last set of jobs is a new search, not a conversation: 'any more?', 'don't repeat yourself', 'none of these suit me', 'something closer to Dublin', 'only permanent ones' all mean call this tool again, carrying the earlier criteria over. Never list jobs from earlier in this conversation instead of calling it — the search gets the whole conversation, sees what it already showed, and will not repeat it. This is the opposite of the other two tools: find_linkedin_connections and find_linkedin_professionals find PEOPLE, this one finds VACANCIES. The scope is the data centre industry in any form (colocation, hyperscale, critical facilities, MEP, commissioning, cooling, power, DCIM, construction and fit-out, NOC and security, DC sales and design); if the user asks for work outside that sector, tell them Crewdog covers data centres rather than calling this tool. The search gets this whole conversation, so it sees the context itself — just say in `request` what to look for now, in the user's own terms.",
         parameters: {
           type: "object",
           properties: {
@@ -463,10 +466,13 @@ app.post("/api/chat", async (req, res) => {
       (typeof sysOverride === "string" && sysOverride.trim()) ||
       systemPrompt() ||
       "";
-    // The next steps are offered as buttons under the answer, not as a question
-    // in the prose, so the contract for them is appended to whatever system
-    // prompt the admin has set rather than living in the editable text.
-    const instructions = `${baseInstructions}\n\n${SUGGESTIONS_CONTRACT}`.trim();
+    // Two contracts between the model and the app — results arrive as cards, and
+    // the next steps are buttons rather than a question in the prose. Both are
+    // appended to whatever system prompt the admin has set rather than living in
+    // the editable text, so neither can be edited away.
+    const instructions = anyFinderEnabled
+      ? `${baseInstructions}\n\n${WORKFLOW_CONTRACT}\n\n${SUGGESTIONS_CONTRACT}`.trim()
+      : `${baseInstructions}\n\n${SUGGESTIONS_CONTRACT}`.trim();
     const addition = typeof userPromptAddition === "string" ? userPromptAddition.trim() : "";
 
     const input = messages.map((m) => ({

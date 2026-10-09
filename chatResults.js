@@ -29,6 +29,23 @@ export const SUGGESTIONS_CONTRACT = [
   "The only time you may ask the user a direct question in the prose is when a search genuinely cannot run without an answer from them (for example the area or the kind of place they want to live in). Even then, still end with the marker and suggestions.",
 ].join("\n");
 
+// Also appended to the admin-set system prompt, for the same reason the
+// suggestions contract is: it is a contract between the model and the app, not
+// editable copy.
+//
+// It exists because a turn with no tool call has no results to render, so the
+// reply comes out as prose — and the model, having every earlier result in its
+// context, answers from those instead of searching. "Don't repeat yourself"
+// then produced a plain markdown list of the jobs it had just shown as cards.
+// The model cannot be the one to decide a follow-up is conversation.
+export const WORKFLOW_CONTRACT = [
+  "SEARCHING",
+  "",
+  "Jobs, people and places to live reach the user as cards, built from the search tools. Never write a job, a person or a property into your own prose — not a list, not a line, not a link, not \"as I mentioned\" — and never answer from results that are already in this conversation. If a reply would name one, you must call the tool instead.",
+  "Every follow-up about a search you have already run is another call to the same tool, however it is worded: \"more\", \"any others?\", \"don't repeat yourself\", \"none of these are good\", \"what about Oslo?\", \"cheaper\", \"only permanent ones\". Carry the earlier criteria over and add what they just said. The tool sees this whole conversation and will not return what it already showed.",
+  "The only replies that need no tool call are the ones that genuinely search for nothing: a question about something already on screen, a criterion you have to ask for before you can search, or a request outside what Crewdog covers.",
+].join("\n");
+
 // Replaces the workflow's own presentation prompt whenever its results are
 // shown as cards, so the reply does not print the same list twice.
 export const CARDS_PRESENTATION = [
