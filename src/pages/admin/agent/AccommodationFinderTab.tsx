@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type { AgentConfig } from "@/services/settings";
 import { ACCOMMODATION_FINDER_DEFAULTS as D } from "../../../../agentPrompts.js";
+import PromptField from "./PromptField";
 
 type Props = {
   enabled: boolean;
@@ -156,6 +157,51 @@ const AccommodationFinderTab = ({ enabled, setEnabled, cfg, set }: Props) => {
           className="font-mono text-sm"
         />
       </section>
+
+      <PromptField
+        label="Message sent with each search"
+        hint="Carries this search's criteria into the model, and the JSON the result cards are built from. Goes after the prompt above."
+        placeholders={[
+          "want",
+          "listing_type",
+          "location",
+          "place_type",
+          "budget",
+          "move_in_date_line",
+          "requirements_line",
+          "today",
+          "max_age_days",
+          "conditions_rule",
+        ]}
+        value={cfg.accom_run_instruction}
+        fallback={D.accom_run_instruction}
+        onChange={(v) => set("accom_run_instruction", v)}
+        rows={14}
+      />
+      <PromptField
+        label="Line used when the user gave no budget"
+        hint="Replaces {{budget}} above when they did not name one."
+        value={cfg.accom_no_budget_line}
+        fallback={D.accom_no_budget_line}
+        onChange={(v) => set("accom_no_budget_line", v)}
+        rows={2}
+      />
+      <PromptField
+        label="Rule used when the user gave conditions"
+        hint="Replaces {{conditions_rule}} above when they asked for things like bills included or parking."
+        value={cfg.accom_conditions_given_rule}
+        fallback={D.accom_conditions_given_rule}
+        onChange={(v) => set("accom_conditions_given_rule", v)}
+        rows={3}
+      />
+      <PromptField
+        label="Rule used when they gave none"
+        hint="Replaces {{conditions_rule}} above when the brief is just an area and a kind of place."
+        value={cfg.accom_no_conditions_rule}
+        fallback={D.accom_no_conditions_rule}
+        onChange={(v) => set("accom_no_conditions_rule", v)}
+        rows={3}
+      />
     </div>
   );
 };

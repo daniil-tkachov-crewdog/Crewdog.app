@@ -7,6 +7,22 @@
 
 import { JOB_DESCRIPTION_DEFAULTS as DEFAULTS } from "./agentPrompts.js";
 
+// Fill {{placeholders}} in an admin-edited prompt from the values the run
+// actually has. Every prompt the app sends is editable in the admin panel, and
+// the ones that carry a search's own criteria into the model need somewhere to
+// put them — this is that seam.
+//
+// An unknown placeholder is left exactly as written rather than blanked, so a
+// typo shows up in the prompt instead of silently deleting a line.
+export function render(template, vars = {}) {
+  return String(template ?? "").replace(/\{\{\s*(\w+)\s*\}\}/g, (whole, key) =>
+    key in vars ? String(vars[key] ?? "") : whole
+  );
+}
+
+// Today, as the prompts want to quote it. Every run gets it as a placeholder.
+export const today = () => new Date().toISOString().slice(0, 10);
+
 // Pull the assistant text out of a Responses API result.
 export function outputText(resp) {
   return resp?.output_text ?? "";
@@ -66,7 +82,9 @@ export async function runJobSearch(openai, args = {}, cfg = {}, model = "gpt-4o"
   const extractResp = await openai.responses.create({
     model,
     instructions: c.extract_instructions,
-    input: `Job description:\n${jobDescription}\n\nReturn ONLY JSON: {"company": string, "company_simplified": string, "title": string, "location": string}`,
+    input: render(c.extract_input || DEFAULTS.extract_input, {
+      job_description: jobDescription,
+    }),
   });
   addUsage(usage, extractResp);
   const extracted = parseJson(outputText(extractResp), {
@@ -88,7 +106,10 @@ export async function runJobSearch(openai, args = {}, cfg = {}, model = "gpt-4o"
       model,
       instructions: c.verify_instructions,
       tools: [{ type: "web_search" }],
-      input: `Company: ${extracted.company || extracted.company_simplified}\nLocation: ${extracted.location}\n\nReturn ONLY JSON: {"exists": boolean, "canonical_name": string, "domain": string, "note": string}`,
+      input: render(c.verify_input || DEFAULTS.verify_input, {
+        company: extracted.company || extracted.company_simplified,
+        location: extracted.location,
+      }),
     });
     addUsage(usage, verifyResp);
     verification = parseJson(outputText(verifyResp), verification);
@@ -102,14 +123,13 @@ export async function runJobSearch(openai, args = {}, cfg = {}, model = "gpt-4o"
     model,
     instructions: c.search_instructions,
     tools: [{ type: "web_search" }],
-    input:
-      `Find up to ${c.max_contacts} real LinkedIn profiles (linkedin.com/in/) of people who could help with an application.\n` +
-      `Target roles (HR / recruiters / hiring): ${c.hr_roles}.\n` +
-      `Company: ${companyForSearch}\n` +
-      `Title being applied for: ${extracted.title}\n` +
-      `Location: ${extracted.location}\n\n` +
-      `Use Google X-ray queries: site:linkedin.com/in/ AND (role terms) AND ("${companyForSearch}") AND ("${extracted.location}").\n` +
-      `Return ONLY JSON: {"contacts":[{"name":string,"title":string,"company":string,"location":string,"linkedin_url":string,"type":"HR"|"connection"}]}`,
+    input: render(c.search_input || DEFAULTS.search_input, {
+      max_contacts: c.max_contacts,
+      hr_roles: c.hr_roles,
+      company: companyForSearch,
+      title: extracted.title,
+      location: extracted.location,
+    }),
   });
   addUsage(usage, searchResp);
   const searchOut = parseJson(outputText(searchResp), { contacts: [] });

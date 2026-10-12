@@ -17,7 +17,7 @@
 // Everything else the user volunteers (budget, bedrooms, bills included, pets,
 // parking, a date) narrows the search but never blocks it.
 
-import { outputText, addUsage, parseJson } from "./agent.js";
+import { outputText, addUsage, parseJson, render, today } from "./agent.js";
 import { ACCOMMODATION_FINDER_DEFAULTS as DEFAULTS } from "./agentPrompts.js";
 import { verifyLinks, parsePhrases, PROPERTY_EXPIRY_PHRASES } from "./linkCheck.js";
 
@@ -118,30 +118,27 @@ export async function runAccommodationFinder(openai, args = {}, cfg = {}, model 
       ? c.accom_search_instructions_buy
       : c.accom_search_instructions_rent;
 
-  const criteriaBlock =
-    `Where they want to live: ${location}\n` +
-    `Kind of place: ${placeType}\n` +
-    (budget ? `Budget: ${budget}\n` : "Budget: not specified — do not filter on price, and state each price as the listing gives it.\n") +
-    (moveInDate ? `Wanted from: ${moveInDate}\n` : "") +
-    (requirements.length ? `Other conditions they asked for: ${requirements.join(", ")}\n` : "");
-
-  // 3) One search pass.
+  // Every line of this is an editable field in the admin panel.
   const searchResp = await openai.responses.create({
     model,
     instructions,
     tools: [{ type: "web_search" }],
-    input:
-      `Find up to ${overFetch} currently available places to ${
-        listingType === "buy" ? "buy" : "rent"
-      }.\n` +
-      criteriaBlock +
-      `\nToday is ${new Date().toISOString().slice(0, 10)}. Do not return a listing you can see was added more than ${maxAgeDays} days ago, or one the page shows as let, sold, under offer or withdrawn.\n` +
-      (requirements.length
-        ? `The conditions above came from the user. Treat them as filters where the listing states enough to judge, and say in the note when you had to relax one to fill the list.\n`
-        : `The user gave no conditions beyond the location and the kind of place, so return the best spread of what is actually available.\n`) +
-      `\nReturn ONLY JSON: {"places":[{"title":string,"place_type":string,"location":string,"price":string,"bedrooms":string,"available_from":string,"furnished":string,"bills_included":string,"listed_by":string,"status_text":string,"source":string,"url":string,"matches":[string],"misses":[string]}],"note":string}\n` +
-      `status_text: the words the listing itself uses about its own status or date, quoted exactly as they appear ("Added yesterday", "Available now", "Reduced on 03/09"). Leave it empty if the page states nothing of the kind — do not paraphrase and do not supply your own wording.\n` +
-      `matches and misses: which of the user's stated conditions this listing meets and which it does not, using their own words. Leave both empty when they gave no conditions.`,
+    input: render(c.accom_run_instruction || DEFAULTS.accom_run_instruction, {
+      want: overFetch,
+      listing_type: listingType === "buy" ? "buy" : "rent",
+      location,
+      place_type: placeType,
+      budget: budget || (c.accom_no_budget_line ?? DEFAULTS.accom_no_budget_line),
+      move_in_date_line: moveInDate ? `Wanted from: ${moveInDate}` : "",
+      requirements_line: requirements.length
+        ? `Other conditions they asked for: ${requirements.join(", ")}`
+        : "",
+      today: today(),
+      max_age_days: maxAgeDays,
+      conditions_rule: requirements.length
+        ? c.accom_conditions_given_rule ?? DEFAULTS.accom_conditions_given_rule
+        : c.accom_no_conditions_rule ?? DEFAULTS.accom_no_conditions_rule,
+    }),
   });
   addUsage(usage, searchResp);
   const out = parseJson(outputText(searchResp), { places: [], note: "" });

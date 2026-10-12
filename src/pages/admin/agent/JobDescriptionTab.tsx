@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type { AgentConfig } from "@/services/settings";
 import { JOB_DESCRIPTION_DEFAULTS as D } from "../../../../agentPrompts.js";
+import PromptField from "./PromptField";
 
 type Props = {
   enabled: boolean;
@@ -74,6 +75,40 @@ const JobDescriptionTab = ({ enabled, setEnabled, cfg, set }: Props) => (
         className="font-mono text-sm"
       />
     </section>
+
+    <section className="space-y-1 pt-2">
+      <h3 className="text-sm font-semibold">The messages each stage sends</h3>
+      <p className="text-xs text-muted-foreground">
+        The prompts above are the instructions for each stage; these are the messages that carry
+        this particular job description into them, and the JSON each stage must answer with. Change
+        a field name here and the stage after it stops finding it.
+      </p>
+    </section>
+
+    <PromptField
+      label="Stage 1 — extract, message"
+      placeholders={["job_description"]}
+      value={cfg.extract_input}
+      fallback={D.extract_input}
+      onChange={(v) => set("extract_input", v)}
+      rows={6}
+    />
+    <PromptField
+      label="Stage 2 — verify company, message"
+      placeholders={["company", "location"]}
+      value={cfg.verify_input}
+      fallback={D.verify_input}
+      onChange={(v) => set("verify_input", v)}
+      rows={6}
+    />
+    <PromptField
+      label="Stage 3 — LinkedIn search, message"
+      placeholders={["max_contacts", "hr_roles", "company", "title", "location"]}
+      value={cfg.search_input}
+      fallback={D.search_input}
+      onChange={(v) => set("search_input", v)}
+      rows={9}
+    />
   </div>
 );
 

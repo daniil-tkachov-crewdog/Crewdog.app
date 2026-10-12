@@ -7,8 +7,78 @@ import { PROPERTY_EXPIRY_PHRASES } from "./linkCheck.js";
 // (src/pages/admin/agent/*) show them as the starting text, so an untouched
 // install displays exactly the prompts it actually runs.
 
+// Workflow routing — the tool descriptions the chat model reads to decide
+// which workflow a message belongs to. They are prompts like any other, so
+// they are editable in the admin panel rather than buried in the server.
+export const ROUTING_DEFAULTS = {
+  tool_find_linkedin_connections:
+    "Find the HR/recruiter contacts and potential connections behind a specific job opening. Call this ONLY when the user has pasted an actual job description. If the user just asks to find people by title and location with no job description, use find_linkedin_professionals instead.",
+  tool_find_linkedin_professionals:
+    "Search LinkedIn for people matching what the user is looking for and return their profile links. Call this whenever the user asks to find people/professionals/candidates WITHOUT pasting a job description (e.g. 'find me senior nurses in Manchester'), and call it again on every follow-up about the same search. A complaint about the last set of people is a new search, not a conversation: 'find more', 'none of these are good', 'don't repeat yourself', 'what about Leeds?', 'only senior ones' all mean call this tool again, carrying the earlier criteria over. Never list people from earlier in this conversation instead of calling it — the search gets the whole conversation, sees who it already showed, and will not repeat them.",
+  tool_find_jobs:
+    "Search the web for currently open data centre job vacancies and return them with title, location, salary and a link to the advert. Call this whenever the user is looking for work FOR THEMSELVES — 'find me a job', 'any data centre jobs in Dublin?', 'what critical facilities roles are open?' — and call it again on every follow-up about the same search. A complaint about the last set of jobs is a new search, not a conversation: 'any more?', 'don't repeat yourself', 'none of these suit me', 'something closer to Dublin', 'only permanent ones' all mean call this tool again, carrying the earlier criteria over. Never list jobs from earlier in this conversation instead of calling it — the search gets the whole conversation, sees what it already showed, and will not repeat it. This is the opposite of the other two tools: find_linkedin_connections and find_linkedin_professionals find PEOPLE, this one finds VACANCIES. The scope is the data centre industry in any form (colocation, hyperscale, critical facilities, MEP, commissioning, cooling, power, DCIM, construction and fit-out, NOC and security, DC sales and design); if the user asks for work outside that sector, tell them Crewdog covers data centres rather than calling this tool. The search gets this whole conversation, so it sees the context itself — just say in `request` what to look for now, in the user's own terms.",
+  tool_find_accommodation:
+    "Search the web for places to live that are available right now and return them with the kind of place, the area, the price and a link to the listing. Call this whenever the user wants somewhere to live \u2014 'find me a room in Slough', 'any flats near the Dublin data centres?', 'I'm relocating for this job, where can I stay?'. This tool needs TWO answers before it can run: the area they want to live in, and what kind of place they want (a room, a houseshare, a studio, a flat, a house). If the user has not given both, ASK for the missing one in your own words and do not call the tool yet \u2014 do not guess a city and do not assume they want a flat. Everything else is optional: a budget, a move-in date, bills included, furnished, parking, pets, a number of bedrooms, a commute. Pass anything they did volunteer, because the search will honour it, and never wait for a budget before searching. Not for finding people or jobs \u2014 use find_linkedin_professionals or find_jobs for those.",
+};
+
+
+// The per-field descriptions inside those tools' arguments. The model reads
+// these to decide what to put in each field, so they are prompts too. Stored
+// as JSON so one field in the panel covers a tool with five arguments; a file
+// that will not parse falls back to the default rather than breaking the tool.
+export const TOOL_PARAM_DEFAULTS = {
+  tool_params_find_linkedin_connections: JSON.stringify(
+    {
+          "job_description": "The full job description text the user pasted. Required — this tool does nothing without it."
+    }
+  , null, 2),
+  tool_params_find_linkedin_professionals: JSON.stringify(
+    {
+          "request": "What to search for now, in the user's own words, including every qualifier they gave — title, location, seniority, company, skills, certifications, availability. e.g. 'safety engineers in London, open to work'."
+    }
+  , null, 2),
+  tool_params_find_jobs: JSON.stringify(
+    {
+          "request": "What to search for now, in the user's own words, including everything they asked for — the kind of role, the location if they named one, and any further requirements (contract, nights, HV authorised, remote). e.g. 'data centre shift technician in Dublin, contract'."
+    }
+  , null, 2),
+  tool_params_find_accommodation: JSON.stringify(
+    {
+          "location": "The town, city, area or neighbourhood they want to live in, e.g. 'Slough' or 'west Dublin'. Required — ask the user rather than sending an empty string or a guess.",
+          "place_type": "The kind of place they want, in their own words, e.g. 'room', 'houseshare', 'studio', 'flat', 'apartment', 'house'. Required — ask the user rather than sending an empty string or assuming one.",
+          "budget": "What they said about price, verbatim and with its currency and period, e.g. 'up to £1,200 a month' or 'around €250 a week'. Empty string when they did not say — do not invent a figure and do not hold up the search for one.",
+          "move_in_date": "When they need it from, as they said it, e.g. '1 March' or 'ASAP'. Empty string when they did not say.",
+          "requirements": "Any other conditions they gave, one per entry, e.g. ['bills included', 'furnished', 'parking', 'pet friendly', '2 bedrooms', 'walking distance to the site']. Empty when they gave none."
+    }
+  , null, 2),
+};
+
 // Workflow 1 — "Job description".
 export const JOB_DESCRIPTION_DEFAULTS = {
+  // The three messages this workflow sends, one per stage. {{…}} are filled in
+  // at run time; everything else is yours to change.
+  extract_input: [
+    "Job description:",
+    "{{job_description}}",
+    "",
+    'Return ONLY JSON: {"company": string, "company_simplified": string, "title": string, "location": string}',
+  ].join("\n"),
+  verify_input: [
+    "Company: {{company}}",
+    "Location: {{location}}",
+    "",
+    'Return ONLY JSON: {"exists": boolean, "canonical_name": string, "domain": string, "note": string}',
+  ].join("\n"),
+  search_input: [
+    "Find up to {{max_contacts}} real LinkedIn profiles (linkedin.com/in/) of people who could help with an application.",
+    "Target roles (HR / recruiters / hiring): {{hr_roles}}.",
+    "Company: {{company}}",
+    "Title being applied for: {{title}}",
+    "Location: {{location}}",
+    "",
+    'Use Google X-ray queries: site:linkedin.com/in/ AND (role terms) AND ("{{company}}") AND ("{{location}}").',
+    'Return ONLY JSON: {"contacts":[{"name":string,"title":string,"company":string,"location":string,"linkedin_url":string,"type":"HR"|"connection"}]}',
+  ].join("\n"),
   max_contacts: 8,
   hr_roles:
     '"human resources", "recruiter", "talent acquisition", "hiring manager", "people team", "HR"',
@@ -58,6 +128,28 @@ export const JOB_DESCRIPTION_DEFAULTS = {
 // search lives in the prompt, so it can be changed in the admin tab without a
 // deploy; the only thing the code adds is the JSON shape the cards need.
 export const LINKEDIN_FINDER_DEFAULTS = {
+  // The JSON the result cards are built from. Editable like everything else —
+  // rename a field here and the cards stop finding it, which is the admin's
+  // call to make, not something to hide in the server.
+  linkedin_finder_output_contract: [
+    "Return ONLY JSON, in this shape:",
+    '{"people":[{"name":string,"title":string,"company":string,"location":string,"linkedin_url":string,"evidence":string,"availability_signal":string}],"note":string}',
+    "- linkedin_url: the person's linkedin.com/in/ profile URL, exactly as the search result showed it.",
+    "- evidence: the search result snippet, post text or headline you judged them on, quoted.",
+    "- availability_signal: their own wording if they have publicly said they are available or open to work, otherwise empty.",
+    "- note: one short line about anything the search could not do, or empty.",
+    "",
+    "ONE ENTRY PER PERSON. The same person turns up in several of your searches, under a locale subdomain or with tracking on the URL — that is one person and they get one entry, with everything you learned about them merged into it. Read your own list back before you answer and collapse any repeats.",
+  ].join("\n"),
+  // The message that carries this particular search into the model, after the
+  // conversation. {{request}} is what the chat model passed on, {{today}} is
+  // the date, {{output_contract}} is the block above.
+  linkedin_finder_run_instruction: [
+    "Run the search now for: {{request}}",
+    "",
+    "Today is {{today}}.",
+    "{{output_contract}}",
+  ].join("\n"),
   linkedin_finder_prompt: [
     "You are Crewdog's LinkedIn finder. A recruiter is talking to you in a chat and the whole conversation is above, so use it for context: a follow-up like \"none of these are good, find more\" means another search built on what you already know, not a fresh start.",
     "",
@@ -82,6 +174,30 @@ export const JOB_FINDER_DEFAULTS = {
   jobfinder_max_age_days: 30,
   jobfinder_include_agencies: true,
   jobfinder_verify_links: false,
+  // The JSON the result cards are built from, and the message that carries one
+  // search into the model. Both editable; {{…}} are filled at run time.
+  job_finder_output_contract: [
+    "Return ONLY JSON, in this shape:",
+    '{"jobs":[{"title":string,"company":string,"location":string,"salary":string,"employment_type":string,"posted_date":string,"status_text":string,"source":string,"url":string,"is_agency":boolean}],"note":string}',
+    "- url: the advert's own URL, exactly as the search result showed it.",
+    "- salary: the advert's own wording, with its currency and period, or empty when it states none.",
+    '- status_text: the words the advert uses about its own status or date, quoted ("Posted 4 days ago", "Applications close 12 October"). Empty when it says nothing of the kind — do not supply your own wording.',
+    "- is_agency: true when a recruitment, staffing or search agency posted it rather than the employer.",
+    "- note: one short line about anything the search could not do, or empty.",
+    "",
+    "ONE ENTRY PER VACANCY. The same job turns up in several of your searches, on several sites, under slightly different URLs and sometimes under a slightly different title — that is one vacancy and it gets one entry. Before you answer, read your own list back and collapse anything that is the same role at the same employer in the same place, keeping the best link for it (the employer's own site over a board, the board over an aggregator). A list of eight distinct jobs is worth more than sixteen entries covering eight.",
+  ].join("\n"),
+  job_finder_run_instruction: [
+    "Run the search now for: {{request}}",
+    "",
+    "Today is {{today}}. Do not return an advert posted more than {{max_age_days}} days ago, or one you cannot date and cannot confirm is still open.",
+    "{{agencies_rule}}",
+    "{{output_contract}}",
+  ].join("\n"),
+  // Added to the run instruction in place of {{agencies_rule}} when the
+  // "Show recruitment agencies?" switch is off, and nothing when it is on.
+  job_finder_agencies_off_rule:
+    "Only adverts on the hiring company's own website. Job boards, recruitment platforms and agency listings are not wanted in this search.",
   job_finder_prompt: [
     "You are Crewdog's job finder. A candidate is talking to you in a chat and the whole conversation is above, so use it for context: a follow-up like \"any more?\" or \"something closer to Dublin\" means another search built on what you already know, not a fresh start.",
     "",
@@ -112,6 +228,29 @@ export const JOB_FINDER_DEFAULTS = {
 // between them. Both stay editable in the tab, so the one that is off today can
 // still be tuned for tomorrow.
 export const ACCOMMODATION_FINDER_DEFAULTS = {
+  // The message this workflow sends with each search, criteria and all.
+  // {{…}} are filled in at run time; the rest is yours to change.
+  accom_run_instruction: [
+    "Find up to {{want}} currently available places to {{listing_type}}.",
+    "Where they want to live: {{location}}",
+    "Kind of place: {{place_type}}",
+    "Budget: {{budget}}",
+    "{{move_in_date_line}}",
+    "{{requirements_line}}",
+    "",
+    "Today is {{today}}. Do not return a listing you can see was added more than {{max_age_days}} days ago, or one the page shows as let, sold, under offer or withdrawn.",
+    "{{conditions_rule}}",
+    "",
+    'Return ONLY JSON: {"places":[{"title":string,"place_type":string,"location":string,"price":string,"bedrooms":string,"available_from":string,"furnished":string,"bills_included":string,"listed_by":string,"status_text":string,"source":string,"url":string,"matches":[string],"misses":[string]}],"note":string}',
+    'status_text: the words the listing itself uses about its own status or date, quoted exactly as they appear ("Added yesterday", "Available now", "Reduced on 03/09"). Leave it empty if the page states nothing of the kind — do not paraphrase and do not supply your own wording.',
+    "matches and misses: which of the user's stated conditions this listing meets and which it does not, using their own words. Leave both empty when they gave no conditions.",
+  ].join("\n"),
+  accom_no_budget_line:
+    "Budget: not specified — do not filter on price, and state each price as the listing gives it.",
+  accom_conditions_given_rule:
+    "The conditions above came from the user. Treat them as filters where the listing states enough to judge, and say in the note when you had to relax one to fill the list.",
+  accom_no_conditions_rule:
+    "The user gave no conditions beyond the location and the kind of place, so return the best spread of what is actually available.",
   accom_max_results: 8,
   accom_max_age_days: 30,
   accom_listing_type: "rent",

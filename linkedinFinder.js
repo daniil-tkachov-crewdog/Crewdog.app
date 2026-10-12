@@ -10,7 +10,7 @@
 // result cards need, and a dedupe pass on the profile URL. LinkedIn authwalls
 // anonymous profile GETs, so the search result is all the evidence there is.
 
-import { outputText, addUsage, parseJson } from "./agent.js";
+import { outputText, addUsage, parseJson, render, today } from "./agent.js";
 import { LINKEDIN_FINDER_DEFAULTS as DEFAULTS } from "./agentPrompts.js";
 
 // linkedin.com/in/<slug> — anything else (company pages, job posts, search
@@ -58,19 +58,6 @@ export function nameFromProfileUrl(url) {
 
 const str = (v) => String(v ?? "").trim();
 
-// Not admin-editable: the shape is wired to the result cards, so it travels
-// with the code rather than with the prompt.
-const OUTPUT_CONTRACT = [
-  "Return ONLY JSON, in this shape:",
-  '{"people":[{"name":string,"title":string,"company":string,"location":string,"linkedin_url":string,"evidence":string,"availability_signal":string}],"note":string}',
-  "- linkedin_url: the person's linkedin.com/in/ profile URL, exactly as the search result showed it.",
-  "- evidence: the search result snippet, post text or headline you judged them on, quoted.",
-  "- availability_signal: their own wording if they have publicly said they are available or open to work, otherwise empty.",
-  "- note: one short line about anything the search could not do, or empty.",
-  "",
-  "ONE ENTRY PER PERSON. The same person turns up in several of your searches, under a locale subdomain or with tracking on the URL — that is one person and they get one entry, with everything you learned about them merged into it. Read your own list back before you answer and collapse any repeats.",
-].join("\n");
-
 export async function runLinkedinFinder(
   openai,
   args = {},
@@ -80,24 +67,31 @@ export async function runLinkedinFinder(
 ) {
   const usage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, requests: 0 };
 
+  const c = { ...DEFAULTS, ...cfg };
   const request = str(args?.request);
-  const prompt = str(cfg.linkedin_finder_prompt) || DEFAULTS.linkedin_finder_prompt;
+  // Every one of these is an editable field in the admin panel.
+  const prompt = str(c.linkedin_finder_prompt) || DEFAULTS.linkedin_finder_prompt;
+  const outputContract =
+    str(c.linkedin_finder_output_contract) || DEFAULTS.linkedin_finder_output_contract;
+  const runInstruction =
+    str(c.linkedin_finder_run_instruction) || DEFAULTS.linkedin_finder_run_instruction;
   // The conversation so far, so a follow-up message lands in context rather
   // than starting from nothing.
   const history = Array.isArray(ctx.history) ? ctx.history : [];
 
   const resp = await openai.responses.create({
     model,
-    instructions: `${prompt}\n\n${OUTPUT_CONTRACT}`,
+    instructions: `${prompt}\n\n${outputContract}`,
     tools: [{ type: "web_search" }],
     input: [
       ...history,
       {
         role: "user",
-        content:
-          `Run the search now for: ${request || "what I asked for above"}\n\n` +
-          `Today is ${new Date().toISOString().slice(0, 10)}.\n` +
-          OUTPUT_CONTRACT,
+        content: render(runInstruction, {
+          request: request || "what I asked for above",
+          today: today(),
+          output_contract: outputContract,
+        }),
       },
     ],
   });

@@ -7,8 +7,10 @@ import JobDescriptionTab from "./agent/JobDescriptionTab";
 import LinkedinFinderTab from "./agent/LinkedinFinderTab";
 import JobFinderTab from "./agent/JobFinderTab";
 import AccommodationFinderTab from "./agent/AccommodationFinderTab";
+import ChatRoutingTab from "./agent/ChatRoutingTab";
 
 const WORKFLOWS = [
+  { key: "chat", label: "Chat & routing" },
   { key: "jd", label: "Job description" },
   { key: "finder", label: "LinkedIn finder" },
   { key: "jobfinder", label: "Job finder" },
@@ -99,6 +101,7 @@ const AgentTab = () => {
         ))}
       </div>
 
+      {workflow === "chat" && <ChatRoutingTab cfg={cfg} set={set} />}
       {workflow === "jd" && (
         <JobDescriptionTab enabled={enabled} setEnabled={setEnabled} cfg={cfg} set={set} />
       )}

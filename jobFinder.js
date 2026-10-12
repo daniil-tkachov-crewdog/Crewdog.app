@@ -17,7 +17,7 @@
 // the employer rents, and it belongs with the boards. isEmployerSite() decides
 // that from the URL, whatever the search claims.
 
-import { outputText, addUsage, parseJson } from "./agent.js";
+import { outputText, addUsage, parseJson, render, today } from "./agent.js";
 import { JOB_FINDER_DEFAULTS as DEFAULTS } from "./agentPrompts.js";
 import { verifyLinks, JOB_EXPIRY_PHRASES } from "./linkCheck.js";
 
@@ -108,26 +108,18 @@ function isEmployerSite(url) {
 }
 
 
-// Not admin-editable: the shape is wired to the result cards, so it travels
-// with the code rather than with the prompt.
-const OUTPUT_CONTRACT = [
-  "Return ONLY JSON, in this shape:",
-  '{"jobs":[{"title":string,"company":string,"location":string,"salary":string,"employment_type":string,"posted_date":string,"status_text":string,"source":string,"url":string,"is_agency":boolean}],"note":string}',
-  "- url: the advert's own URL, exactly as the search result showed it.",
-  "- salary: the advert's own wording, with its currency and period, or empty when it states none.",
-  "- status_text: the words the advert uses about its own status or date, quoted (\"Posted 4 days ago\", \"Applications close 12 October\"). Empty when it says nothing of the kind — do not supply your own wording.",
-  "- is_agency: true when a recruitment, staffing or search agency posted it rather than the employer.",
-  "- note: one short line about anything the search could not do, or empty.",
-  "",
-  "ONE ENTRY PER VACANCY. The same job turns up in several of your searches, on several sites, under slightly different URLs and sometimes under a slightly different title — that is one vacancy and it gets one entry. Before you answer, read your own list back and collapse anything that is the same role at the same employer in the same place, keeping the best link for it (the employer's own site over a board, the board over an aggregator). A list of eight distinct jobs is worth more than sixteen entries covering eight.",
-].join("\n");
-
 export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o", ctx = {}) {
   const usage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, requests: 0 };
 
   const c = { ...DEFAULTS, ...cfg };
   const request = str(args?.request);
-  const prompt = str(cfg.job_finder_prompt) || DEFAULTS.job_finder_prompt;
+  // Every one of these is an editable field in the admin panel.
+  const prompt = str(c.job_finder_prompt) || DEFAULTS.job_finder_prompt;
+  const outputContract =
+    str(c.job_finder_output_contract) || DEFAULTS.job_finder_output_contract;
+  const runInstruction =
+    str(c.job_finder_run_instruction) || DEFAULTS.job_finder_run_instruction;
+  const agenciesOffRule = str(c.job_finder_agencies_off_rule);
   // The conversation so far, so a follow-up message lands in context rather
   // than starting from nothing.
   const history = Array.isArray(ctx.history) ? ctx.history : [];
@@ -141,19 +133,19 @@ export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o"
 
   const resp = await openai.responses.create({
     model,
-    instructions: `${prompt}\n\n${OUTPUT_CONTRACT}`,
+    instructions: `${prompt}\n\n${outputContract}`,
     tools: [{ type: "web_search" }],
     input: [
       ...history,
       {
         role: "user",
-        content:
-          `Run the search now for: ${request || "what I asked for above"}\n\n` +
-          `Today is ${new Date().toISOString().slice(0, 10)}. Do not return an advert posted more than ${maxAgeDays} days ago, or one you cannot date and cannot confirm is still open.\n` +
-          (includeAgencies
-            ? ""
-            : "Only adverts on the hiring company's own website. Job boards, recruitment platforms and agency listings are not wanted in this search.\n") +
-          OUTPUT_CONTRACT,
+        content: render(runInstruction, {
+          request: request || "what I asked for above",
+          today: today(),
+          max_age_days: maxAgeDays,
+          agencies_rule: includeAgencies ? "" : agenciesOffRule,
+          output_contract: outputContract,
+        }),
       },
     ],
   });

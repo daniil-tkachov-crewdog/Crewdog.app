@@ -86,6 +86,7 @@ import {
 } from "./usage.js";
 import { recordPageView } from "./traffic.js";
 import { recordChatCall } from "./chatlog.js";
+import { ROUTING_DEFAULTS, TOOL_PARAM_DEFAULTS } from "./agentPrompts.js";
 import { isBlockedPath } from "./blocklist.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -366,6 +367,25 @@ app.post("/api/chat", async (req, res) => {
     loggedModel = activeModel;
     loggedAgent = anyFinderEnabled;
 
+    // Tool descriptions are prompts too — the model reads them to decide which
+    // workflow a message belongs to — so they come from the admin config.
+    const routing = { ...ROUTING_DEFAULTS, ...(agent?.config ?? {}) };
+    const toolDesc = (k) => String(routing[k] ?? "").trim() || ROUTING_DEFAULTS[k];
+    // Argument descriptions come as one JSON blob per tool. Unparseable edits
+    // fall back to the defaults: a bad paste in the panel must not take the
+    // workflow down with it.
+    const toolParam = (k, field) => {
+      for (const src of [routing[k], TOOL_PARAM_DEFAULTS[k]]) {
+        try {
+          const v = JSON.parse(String(src ?? ""))?.[field];
+          if (typeof v === "string" && v.trim()) return v;
+        } catch {
+          /* try the default next */
+        }
+      }
+      return "";
+    };
+
     const tools = [];
     if (webSearch) tools.push({ type: "web_search" });
     if (fileSearch) tools.push({ type: "file_search" });
@@ -373,14 +393,13 @@ app.post("/api/chat", async (req, res) => {
       tools.push({
         type: "function",
         name: "find_linkedin_connections",
-        description:
-          "Find the HR/recruiter contacts and potential connections behind a specific job opening. Call this ONLY when the user has pasted an actual job description. If the user just asks to find people by title and location with no job description, use find_linkedin_professionals instead.",
+        description: toolDesc("tool_find_linkedin_connections"),
         parameters: {
           type: "object",
           properties: {
             job_description: {
               type: "string",
-              description: "The full job description text the user pasted. Required — this tool does nothing without it.",
+              description: toolParam("tool_params_find_linkedin_connections", "job_description"),
             },
           },
           required: ["job_description"],
@@ -392,15 +411,13 @@ app.post("/api/chat", async (req, res) => {
       tools.push({
         type: "function",
         name: "find_linkedin_professionals",
-        description:
-          "Search LinkedIn for people matching what the user is looking for and return their profile links. Call this whenever the user asks to find people/professionals/candidates WITHOUT pasting a job description (e.g. 'find me senior nurses in Manchester'), and call it again on every follow-up about the same search. A complaint about the last set of people is a new search, not a conversation: 'find more', 'none of these are good', 'don't repeat yourself', 'what about Leeds?', 'only senior ones' all mean call this tool again, carrying the earlier criteria over. Never list people from earlier in this conversation instead of calling it — the search gets the whole conversation, sees who it already showed, and will not repeat them.",
+        description: toolDesc("tool_find_linkedin_professionals"),
         parameters: {
           type: "object",
           properties: {
             request: {
               type: "string",
-              description:
-                "What to search for now, in the user's own words, including every qualifier they gave — title, location, seniority, company, skills, certifications, availability. e.g. 'safety engineers in London, open to work'.",
+              description: toolParam("tool_params_find_linkedin_professionals", "request"),
             },
           },
           required: ["request"],
@@ -412,15 +429,13 @@ app.post("/api/chat", async (req, res) => {
       tools.push({
         type: "function",
         name: "find_jobs",
-        description:
-          "Search the web for currently open data centre job vacancies and return them with title, location, salary and a link to the advert. Call this whenever the user is looking for work FOR THEMSELVES — 'find me a job', 'any data centre jobs in Dublin?', 'what critical facilities roles are open?' — and call it again on every follow-up about the same search. A complaint about the last set of jobs is a new search, not a conversation: 'any more?', 'don't repeat yourself', 'none of these suit me', 'something closer to Dublin', 'only permanent ones' all mean call this tool again, carrying the earlier criteria over. Never list jobs from earlier in this conversation instead of calling it — the search gets the whole conversation, sees what it already showed, and will not repeat it. This is the opposite of the other two tools: find_linkedin_connections and find_linkedin_professionals find PEOPLE, this one finds VACANCIES. The scope is the data centre industry in any form (colocation, hyperscale, critical facilities, MEP, commissioning, cooling, power, DCIM, construction and fit-out, NOC and security, DC sales and design); if the user asks for work outside that sector, tell them Crewdog covers data centres rather than calling this tool. The search gets this whole conversation, so it sees the context itself — just say in `request` what to look for now, in the user's own terms.",
+        description: toolDesc("tool_find_jobs"),
         parameters: {
           type: "object",
           properties: {
             request: {
               type: "string",
-              description:
-                "What to search for now, in the user's own words, including everything they asked for — the kind of role, the location if they named one, and any further requirements (contract, nights, HV authorised, remote). e.g. 'data centre shift technician in Dublin, contract'.",
+              description: toolParam("tool_params_find_jobs", "request"),
             },
           },
           required: ["request"],
@@ -433,36 +448,30 @@ app.post("/api/chat", async (req, res) => {
       tools.push({
         type: "function",
         name: "find_accommodation",
-        description:
-          "Search the web for places to live that are available right now and return them with the kind of place, the area, the price and a link to the listing. Call this whenever the user wants somewhere to live \u2014 'find me a room in Slough', 'any flats near the Dublin data centres?', 'I'm relocating for this job, where can I stay?'. This tool needs TWO answers before it can run: the area they want to live in, and what kind of place they want (a room, a houseshare, a studio, a flat, a house). If the user has not given both, ASK for the missing one in your own words and do not call the tool yet \u2014 do not guess a city and do not assume they want a flat. Everything else is optional: a budget, a move-in date, bills included, furnished, parking, pets, a number of bedrooms, a commute. Pass anything they did volunteer, because the search will honour it, and never wait for a budget before searching. Not for finding people or jobs \u2014 use find_linkedin_professionals or find_jobs for those.",
+        description: toolDesc("tool_find_accommodation"),
         parameters: {
           type: "object",
           properties: {
             location: {
               type: "string",
-              description:
-                "The town, city, area or neighbourhood they want to live in, e.g. 'Slough' or 'west Dublin'. Required \u2014 ask the user rather than sending an empty string or a guess.",
+              description: toolParam("tool_params_find_accommodation", "location"),
             },
             place_type: {
               type: "string",
-              description:
-                "The kind of place they want, in their own words, e.g. 'room', 'houseshare', 'studio', 'flat', 'apartment', 'house'. Required \u2014 ask the user rather than sending an empty string or assuming one.",
+              description: toolParam("tool_params_find_accommodation", "place_type"),
             },
             budget: {
               type: "string",
-              description:
-                "What they said about price, verbatim and with its currency and period, e.g. 'up to \u00a31,200 a month' or 'around \u20ac250 a week'. Empty string when they did not say \u2014 do not invent a figure and do not hold up the search for one.",
+              description: toolParam("tool_params_find_accommodation", "budget"),
             },
             move_in_date: {
               type: "string",
-              description:
-                "When they need it from, as they said it, e.g. '1 March' or 'ASAP'. Empty string when they did not say.",
+              description: toolParam("tool_params_find_accommodation", "move_in_date"),
             },
             requirements: {
               type: "array",
               items: { type: "string" },
-              description:
-                "Any other conditions they gave, one per entry, e.g. ['bills included', 'furnished', 'parking', 'pet friendly', '2 bedrooms', 'walking distance to the site']. Empty when they gave none.",
+              description: toolParam("tool_params_find_accommodation", "requirements"),
             },
           },
           required: ["location", "place_type", "budget", "move_in_date", "requirements"],
@@ -479,9 +488,13 @@ app.post("/api/chat", async (req, res) => {
     // the next steps are buttons rather than a question in the prose. Both are
     // appended to whatever system prompt the admin has set rather than living in
     // the editable text, so neither can be edited away.
+    const workflowContract =
+      String(routing.chat_workflow_contract ?? "").trim() || WORKFLOW_CONTRACT;
+    const suggestionsContract =
+      String(routing.chat_suggestions_contract ?? "").trim() || SUGGESTIONS_CONTRACT;
     const instructions = anyFinderEnabled
-      ? `${baseInstructions}\n\n${WORKFLOW_CONTRACT}\n\n${SUGGESTIONS_CONTRACT}`.trim()
-      : `${baseInstructions}\n\n${SUGGESTIONS_CONTRACT}`.trim();
+      ? `${baseInstructions}\n\n${workflowContract}\n\n${suggestionsContract}`.trim()
+      : `${baseInstructions}\n\n${suggestionsContract}`.trim();
     const addition = typeof userPromptAddition === "string" ? userPromptAddition.trim() : "";
 
     const input = messages.map((m) => ({
@@ -549,9 +562,13 @@ app.post("/api/chat", async (req, res) => {
           // Whatever tells the model how to present this result is also what
           // tells it to stop writing, so the suggestions exemption is pinned to
           // the end of it rather than left in the system prompt to be overruled.
+          const cardsPresentation =
+            String(routing.chat_cards_presentation ?? "").trim() || CARDS_PRESENTATION;
+          const suggestionsTail =
+            String(routing.chat_suggestions_tail ?? "").trim() || SUGGESTIONS_TAIL;
           const presentation = `${
-            group ? CARDS_PRESENTATION : result?.presentation ?? ""
-          }\n\n${SUGGESTIONS_TAIL}`.trim();
+            group ? cardsPresentation : result?.presentation ?? ""
+          }\n\n${suggestionsTail}`.trim();
           out = JSON.stringify({ ...result, presentation });
         } catch (e) {
           agentCalls.push({ tool: call.name, error: String(e?.message || e).slice(0, 300) });

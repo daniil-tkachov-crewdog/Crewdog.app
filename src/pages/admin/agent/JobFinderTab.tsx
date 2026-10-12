@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type { AgentConfig } from "@/services/settings";
 import { JOB_FINDER_DEFAULTS as D } from "../../../../agentPrompts.js";
+import PromptField from "./PromptField";
 
 type Props = {
   enabled: boolean;
@@ -87,10 +88,35 @@ const JobFinderTab = ({ enabled, setEnabled, cfg, set }: Props) => {
         className="font-mono text-sm"
       />
       <p className="text-xs text-muted-foreground">
-        Explain the task in plain words. The JSON the result cards are built from is added by the
-        app, so there is no need to describe it here.
+        Explain the task in plain words. The answer format below is sent with it.
       </p>
     </section>
+
+    <PromptField
+      label="Answer format"
+      hint="The JSON the result cards are built from, and the one-entry-per-vacancy rule. Rename a field and the cards stop finding it."
+      value={cfg.job_finder_output_contract}
+      fallback={D.job_finder_output_contract}
+      onChange={(v) => set("job_finder_output_contract", v)}
+      rows={12}
+    />
+    <PromptField
+      label="Message sent with each search"
+      hint="Goes after the conversation, as the last thing the search reads."
+      placeholders={["request", "today", "max_age_days", "agencies_rule", "output_contract"]}
+      value={cfg.job_finder_run_instruction}
+      fallback={D.job_finder_run_instruction}
+      onChange={(v) => set("job_finder_run_instruction", v)}
+      rows={6}
+    />
+    <PromptField
+      label="Rule used when agencies are switched off"
+      hint="Replaces {{agencies_rule}} above when the switch is off. Nothing is sent when it is on."
+      value={cfg.job_finder_agencies_off_rule}
+      fallback={D.job_finder_agencies_off_rule}
+      onChange={(v) => set("job_finder_agencies_off_rule", v)}
+      rows={3}
+    />
   </div>
   );
 };

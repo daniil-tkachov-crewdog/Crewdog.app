@@ -6,16 +6,40 @@ import { supabase } from "@/lib/supabase";
 // prefix. All four live in the same app_settings.agent_config JSON blob, edited
 // from the AI Agent sub-tabs.
 export type AgentConfig = {
+  // Workflow routing — the tool descriptions the chat model reads to pick a
+  // workflow — and the contracts appended to the system prompt and to every
+  // workflow result. Prompts like any other, so all editable.
+  tool_find_linkedin_connections?: string;
+  tool_find_linkedin_professionals?: string;
+  tool_find_jobs?: string;
+  tool_find_accommodation?: string;
+  chat_workflow_contract?: string;
+  chat_suggestions_contract?: string;
+  chat_cards_presentation?: string;
+  chat_suggestions_tail?: string;
+  // Argument descriptions, one JSON object per workflow.
+  tool_params_find_linkedin_connections?: string;
+  tool_params_find_linkedin_professionals?: string;
+  tool_params_find_jobs?: string;
+  tool_params_find_accommodation?: string;
   max_contacts?: number;
   hr_roles?: string;
   extract_instructions?: string;
   verify_instructions?: string;
   search_instructions?: string;
+  extract_input?: string;
+  verify_input?: string;
+  search_input?: string;
   // Workflows 2 and 3 are one editable prompt each, re-injected on every
   // message the chat model routes to them.
   linkedin_finder_prompt?: string;
+  linkedin_finder_output_contract?: string;
+  linkedin_finder_run_instruction?: string;
   job_finder_prompt?: string;
-  // Job finder behaviour switches, separate from its prompt.
+  job_finder_output_contract?: string;
+  job_finder_run_instruction?: string;
+  job_finder_agencies_off_rule?: string;
+  // Job finder behaviour switches, separate from its prompts.
   jobfinder_max_age_days?: number;
   jobfinder_include_agencies?: boolean;
   jobfinder_verify_links?: boolean;
@@ -28,6 +52,10 @@ export type AgentConfig = {
   accom_search_instructions_rent?: string;
   accom_search_instructions_buy?: string;
   accom_compress_instructions?: string;
+  accom_run_instruction?: string;
+  accom_no_budget_line?: string;
+  accom_conditions_given_rule?: string;
+  accom_no_conditions_rule?: string;
 };
 
 // Public-site metadata, edited in the admin SEO tab. The server renders these

@@ -2,6 +2,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import type { AgentConfig } from "@/services/settings";
 import { LINKEDIN_FINDER_DEFAULTS as D } from "../../../../agentPrompts.js";
+import PromptField from "./PromptField";
 
 type Props = {
   enabled: boolean;
@@ -34,10 +35,27 @@ const LinkedinFinderTab = ({ enabled, setEnabled, cfg, set }: Props) => (
         className="font-mono text-sm"
       />
       <p className="text-xs text-muted-foreground">
-        Explain the task in plain words. The JSON the result cards are built from is added by the
-        app, so there is no need to describe it here.
+        Explain the task in plain words. The answer format below is sent with it.
       </p>
     </section>
+
+    <PromptField
+      label="Answer format"
+      hint="The JSON the result cards are built from, and the one-entry-per-person rule. Rename a field and the cards stop finding it."
+      value={cfg.linkedin_finder_output_contract}
+      fallback={D.linkedin_finder_output_contract}
+      onChange={(v) => set("linkedin_finder_output_contract", v)}
+      rows={10}
+    />
+    <PromptField
+      label="Message sent with each search"
+      hint="Goes after the conversation, as the last thing the search reads."
+      placeholders={["request", "today", "output_contract"]}
+      value={cfg.linkedin_finder_run_instruction}
+      fallback={D.linkedin_finder_run_instruction}
+      onChange={(v) => set("linkedin_finder_run_instruction", v)}
+      rows={5}
+    />
   </div>
 );
 
