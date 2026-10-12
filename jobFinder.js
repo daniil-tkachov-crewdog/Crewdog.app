@@ -165,10 +165,27 @@ export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o"
   // copied off a board's results page carry its "?keywords=" with them and were
   // being binned as search pages. Whose site the advert is on is still read off
   // the URL rather than taken on trust, because that only sorts the list.
+  //
+  // Every rejection is counted. "16 found, 6 shown" with no account of the ten
+  // is how three separate filters each got blamed for the others' losses, so
+  // the numbers now travel with the result and into the call log.
+  const dropped = { no_url: 0, duplicate: 0, no_title: 0, agency_filtered: 0 };
   const byUrl = new Map();
   for (const job of raw) {
     const url = normalizeUrl(job?.url);
-    if (!url || byUrl.has(url)) continue;
+    if (!url) {
+      dropped.no_url += 1;
+      continue;
+    }
+    if (byUrl.has(url)) {
+      dropped.duplicate += 1;
+      continue;
+    }
+    // The cards need a name to show; a row without one collapses the group.
+    if (!str(job?.title)) {
+      dropped.no_title += 1;
+      continue;
+    }
     byUrl.set(url, {
       title: str(job?.title),
       company: str(job?.company),
@@ -188,9 +205,11 @@ export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o"
   // the company career pages — and the URL decides that, not the search, so an
   // advert the model called direct but hosted on rented recruitment software
   // still goes.
-  const candidates = [...byUrl.values()].filter(
-    (j) => includeAgencies || j.source_type === "direct"
-  );
+  const candidates = [...byUrl.values()].filter((j) => {
+    if (includeAgencies || j.source_type === "direct") return true;
+    dropped.agency_filtered += 1;
+    return false;
+  });
 
   // Off by default now. It does catch dead adverts — a search index is weeks
   // behind and closed adverts are the pages it indexes best — but it was
@@ -221,6 +240,7 @@ export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o"
       direct_count: jobs.filter((j) => j.source_type === "direct").length,
       board_count: jobs.filter((j) => j.source_type !== "direct").length,
       found_count: raw.length,
+      dropped,
       link_check: checkStats
         ? { ...checkStats, dropped: droppedDead.slice(0, 10) }
         : { skipped: true },

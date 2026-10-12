@@ -55,6 +55,15 @@ function summarizeAgentCall(name, args, result) {
     row.returned = result?.jobs?.length ?? 0;
     row.direct = result?.direct_count ?? 0;
     row.board = result?.board_count ?? 0;
+    // Why the ones that did not make it did not make it.
+    row.dropped = result?.dropped ?? null;
+    row.link_check = result?.link_check?.skipped
+      ? "skipped"
+      : {
+          checked: result?.link_check?.checked ?? 0,
+          dead: result?.link_check?.dead ?? 0,
+          unknown: result?.link_check?.unknown ?? 0,
+        };
   } else if (name === "find_linkedin_professionals") {
     row.request = String(args?.request ?? "").slice(0, 200);
     row.found = result?.found_count ?? 0;
