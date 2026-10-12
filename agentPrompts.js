@@ -179,7 +179,7 @@ export const JOB_FINDER_DEFAULTS = {
   job_finder_output_contract: [
     "Return ONLY JSON, in this shape:",
     '{"jobs":[{"title":string,"company":string,"location":string,"salary":string,"employment_type":string,"posted_date":string,"status_text":string,"source":string,"url":string,"is_agency":boolean}],"note":string}',
-    "- url: the advert's own URL, exactly as the search result showed it.",
+    "- url: the advert's own URL, exactly as the search result showed it. REQUIRED, and never empty. A job without a resolvable advert URL must not be returned at all — open the listing and find the link, or drop the row yourself. Never return a row with an empty, placeholder or guessed url: it will be discarded and the user will see nothing.",
     "- salary: the advert's own wording, with its currency and period, or empty when it states none.",
     '- status_text: the words the advert uses about its own status or date, quoted ("Posted 4 days ago", "Applications close 12 October"). Empty when it says nothing of the kind — do not supply your own wording.',
     "- is_agency: true when a recruitment, staffing or search agency posted it rather than the employer.",
