@@ -50,11 +50,11 @@ const JobFinderTab = ({ enabled, setEnabled, cfg, set }: Props) => {
         <div>
           <span className="text-sm font-medium">Check every link is still live</span>
           <p className="text-xs text-muted-foreground">
-            On: every advert is opened before the candidate sees it, and the expired ones are
-            dropped. Costs no tokens and a few seconds, and it is the only thing standing between
-            the candidate and a dead &ldquo;Apply&rdquo; button — a search engine&rsquo;s index is
-            weeks behind, and closed adverts are the pages it indexes best. Off: nothing is
-            dropped and nothing is confirmed.
+            Off by default. On: every advert is opened before the candidate sees it and the
+            expired ones are dropped, which does catch dead &ldquo;Apply&rdquo; buttons — a search
+            engine&rsquo;s index runs weeks behind, and closed adverts are the pages it indexes
+            best — but it shortens the list, and a site that blocks us counts against a job that
+            is perfectly fine. Off: every advert found is shown, and some will have closed.
           </p>
         </div>
         <Switch

@@ -107,22 +107,6 @@ function isEmployerSite(url) {
   return !NOT_EMPLOYER_PATTERNS.some((re) => re.test(host));
 }
 
-// A search results page, a board's category listing or a company homepage is a
-// place to look for a job, not a job. The search prompt says so; this is the
-// backstop for when the model returns one anyway.
-const NOT_AN_ADVERT =
-  /\/(search|jobs|careers|vacancies|opportunities|results)\/?$|[?&](q|query|keywords|search)=/i;
-
-function isAdvertUrl(url) {
-  try {
-    const u = new URL(url);
-    if (u.pathname === "/" || u.pathname === "") return false;
-    return !NOT_AN_ADVERT.test(u.pathname + u.search);
-  } catch {
-    return false;
-  }
-}
-
 
 // Not admin-editable: the shape is wired to the result cards, so it travels
 // with the code rather than with the prompt.
@@ -176,13 +160,15 @@ export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o"
   const out = parseJson(outputText(resp), { jobs: [], note: "" });
   const raw = Array.isArray(out?.jobs) ? out.jobs : [];
 
-  // One row per advert URL. A search results page or a company homepage is a
-  // place to look for a job, not a job, so it goes; whose site the advert is on
-  // is read off the URL rather than taken on trust.
+  // One row per advert URL. Nothing else is thrown away here: a URL shape is a
+  // guess, and guessing cost more real adverts than it ever saved — the ones
+  // copied off a board's results page carry its "?keywords=" with them and were
+  // being binned as search pages. Whose site the advert is on is still read off
+  // the URL rather than taken on trust, because that only sorts the list.
   const byUrl = new Map();
   for (const job of raw) {
     const url = normalizeUrl(job?.url);
-    if (!url || !isAdvertUrl(url) || byUrl.has(url)) continue;
+    if (!url || byUrl.has(url)) continue;
     byUrl.set(url, {
       title: str(job?.title),
       company: str(job?.company),
@@ -206,18 +192,14 @@ export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o"
     (j) => includeAgencies || j.source_type === "direct"
   );
 
-  // Follow every link. A 404, a "no longer accepting applications" banner on an
-  // otherwise healthy 200, or a bounce to the board's search page all mean the
-  // advert is gone. A 403 from a board that blocks datacentre IPs means only
-  // that we were blocked, so those stay in, flagged.
+  // Off by default now. It does catch dead adverts — a search index is weeks
+  // behind and closed adverts are the pages it indexes best — but it was
+  // costing more of the list than it was worth, so it is opt-in from the tab.
   let kept = candidates;
   let checkStats = null;
   let droppedDead = [];
   if (verifyEnabled) {
-    const checked = await verifyLinks(candidates, {
-      phrases: JOB_EXPIRY_PHRASES,
-      isDeadEndUrl: (u) => !isAdvertUrl(u),
-    });
+    const checked = await verifyLinks(candidates, { phrases: JOB_EXPIRY_PHRASES });
     kept = checked.kept;
     checkStats = checked.stats;
     droppedDead = checked.dropped;

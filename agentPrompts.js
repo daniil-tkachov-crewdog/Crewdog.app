@@ -79,7 +79,7 @@ export const JOB_FINDER_DEFAULTS = {
   // Behaviour, not prompt text, so each one is its own control in the tab.
   jobfinder_max_age_days: 30,
   jobfinder_include_agencies: true,
-  jobfinder_verify_links: true,
+  jobfinder_verify_links: false,
   job_finder_prompt: [
     "You are Crewdog's job finder. A candidate is talking to you in a chat and the whole conversation is above, so use it for context: a follow-up like \"any more?\" or \"something closer to Dublin\" means another search built on what you already know, not a fresh start.",
     "",
