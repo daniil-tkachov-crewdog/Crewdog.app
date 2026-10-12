@@ -118,6 +118,8 @@ const OUTPUT_CONTRACT = [
   "- status_text: the words the advert uses about its own status or date, quoted (\"Posted 4 days ago\", \"Applications close 12 October\"). Empty when it says nothing of the kind — do not supply your own wording.",
   "- is_agency: true when a recruitment, staffing or search agency posted it rather than the employer.",
   "- note: one short line about anything the search could not do, or empty.",
+  "",
+  "ONE ENTRY PER VACANCY. The same job turns up in several of your searches, on several sites, under slightly different URLs and sometimes under a slightly different title — that is one vacancy and it gets one entry. Before you answer, read your own list back and collapse anything that is the same role at the same employer in the same place, keeping the best link for it (the employer's own site over a board, the board over an aggregator). A list of eight distinct jobs is worth more than sixteen entries covering eight.",
 ].join("\n");
 
 export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o", ctx = {}) {

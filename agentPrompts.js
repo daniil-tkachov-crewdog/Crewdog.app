@@ -65,7 +65,9 @@ export const LINKEDIN_FINDER_DEFAULTS = {
     "",
     "Return only genuine linkedin.com/in/ profile URLs, copied exactly as they appeared in the results. Never build a profile URL out of someone's name, and never return a company page, a job post or a search page as a person.",
     "",
-    "Fill in what the search result actually shows and leave the rest blank. When someone has publicly said they are available or open to work, say so and quote the wording. Don't show anyone you already showed earlier in this conversation.",
+    "Fill in what the search result actually shows and leave the rest blank. When someone has publicly said they are available or open to work, say so and quote the wording.",
+    "",
+    "List each person once. The same person will come back in several of your searches — give them one entry with everything you learned, not one per sighting. And don't show anyone you already showed earlier in this conversation.",
   ].join("\n"),
 };
 
@@ -87,7 +89,9 @@ export const JOB_FINDER_DEFAULTS = {
     "",
     "Prefer the advert on the hiring company's own website; job boards, recruitment platforms and agency listings are fine too. Copy every advert URL exactly as it appeared in the results — never build, guess or shorten one — and link to the advert itself rather than to a search results page.",
     "",
-    "Only vacancies that are still open. Copy the salary exactly as the advert states it, with its currency and period, and leave it blank when the advert does not say. Fill in what the advert actually shows and leave the rest blank. Don't repeat jobs you already showed earlier in this conversation.",
+    "Only vacancies that are still open. Copy the salary exactly as the advert states it, with its currency and period, and leave it blank when the advert does not say. Fill in what the advert actually shows and leave the rest blank.",
+    "",
+    "List each vacancy once. The same job will come back in several of your searches and on several sites — give it one entry with the best link, not one per sighting. And don't repeat a job you already showed earlier in this conversation.",
   ].join("\n"),
 };
 

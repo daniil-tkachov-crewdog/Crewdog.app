@@ -67,6 +67,8 @@ const OUTPUT_CONTRACT = [
   "- evidence: the search result snippet, post text or headline you judged them on, quoted.",
   "- availability_signal: their own wording if they have publicly said they are available or open to work, otherwise empty.",
   "- note: one short line about anything the search could not do, or empty.",
+  "",
+  "ONE ENTRY PER PERSON. The same person turns up in several of your searches, under a locale subdomain or with tracking on the URL — that is one person and they get one entry, with everything you learned about them merged into it. Read your own list back before you answer and collapse any repeats.",
 ].join("\n");
 
 export async function runLinkedinFinder(
