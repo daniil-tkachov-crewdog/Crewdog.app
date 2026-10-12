@@ -139,11 +139,19 @@ const OUTPUT_CONTRACT = [
 export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o", ctx = {}) {
   const usage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, requests: 0 };
 
+  const c = { ...DEFAULTS, ...cfg };
   const request = str(args?.request);
   const prompt = str(cfg.job_finder_prompt) || DEFAULTS.job_finder_prompt;
   // The conversation so far, so a follow-up message lands in context rather
   // than starting from nothing.
   const history = Array.isArray(ctx.history) ? ctx.history : [];
+
+  // The three admin switches. They are behaviour, not prompt text: how old an
+  // advert may be, whether boards and agencies count at all, and whether every
+  // surviving link is opened before the candidate sees it.
+  const maxAgeDays = Math.max(1, Number(c.jobfinder_max_age_days) || 30);
+  const includeAgencies = c.jobfinder_include_agencies !== false;
+  const verifyEnabled = c.jobfinder_verify_links !== false;
 
   const resp = await openai.responses.create({
     model,
@@ -155,7 +163,10 @@ export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o"
         role: "user",
         content:
           `Run the search now for: ${request || "what I asked for above"}\n\n` +
-          `Today is ${new Date().toISOString().slice(0, 10)}.\n` +
+          `Today is ${new Date().toISOString().slice(0, 10)}. Do not return an advert posted more than ${maxAgeDays} days ago, or one you cannot date and cannot confirm is still open.\n` +
+          (includeAgencies
+            ? ""
+            : "Only adverts on the hiring company's own website. Job boards, recruitment platforms and agency listings are not wanted in this search.\n") +
           OUTPUT_CONTRACT,
       },
     ],
@@ -187,14 +198,30 @@ export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o"
     });
   }
 
+  // With boards and agencies switched off, the only list the admin asked for is
+  // the company career pages — and the URL decides that, not the search, so an
+  // advert the model called direct but hosted on rented recruitment software
+  // still goes.
+  const candidates = [...byUrl.values()].filter(
+    (j) => includeAgencies || j.source_type === "direct"
+  );
+
   // Follow every link. A 404, a "no longer accepting applications" banner on an
   // otherwise healthy 200, or a bounce to the board's search page all mean the
   // advert is gone. A 403 from a board that blocks datacentre IPs means only
   // that we were blocked, so those stay in, flagged.
-  const { kept, dropped, stats } = await verifyLinks([...byUrl.values()], {
-    phrases: JOB_EXPIRY_PHRASES,
-    isDeadEndUrl: (u) => !isAdvertUrl(u),
-  });
+  let kept = candidates;
+  let checkStats = null;
+  let droppedDead = [];
+  if (verifyEnabled) {
+    const checked = await verifyLinks(candidates, {
+      phrases: JOB_EXPIRY_PHRASES,
+      isDeadEndUrl: (u) => !isAdvertUrl(u),
+    });
+    kept = checked.kept;
+    checkStats = checked.stats;
+    droppedDead = checked.dropped;
+  }
 
   // Employer career pages first — applying on the company's own site means no
   // middleman — then everything else, each group in the order the search gave.
@@ -207,10 +234,14 @@ export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o"
     result: {
       request,
       jobs,
+      include_agencies: includeAgencies,
+      max_age_days: maxAgeDays,
       direct_count: jobs.filter((j) => j.source_type === "direct").length,
       board_count: jobs.filter((j) => j.source_type !== "direct").length,
       found_count: raw.length,
-      link_check: { ...stats, dropped: dropped.slice(0, 10) },
+      link_check: checkStats
+        ? { ...checkStats, dropped: droppedDead.slice(0, 10) }
+        : { skipped: true },
       note: str(out?.note),
     },
     usage,

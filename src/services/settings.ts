@@ -15,6 +15,10 @@ export type AgentConfig = {
   // message the chat model routes to them.
   linkedin_finder_prompt?: string;
   job_finder_prompt?: string;
+  // Job finder behaviour switches, separate from its prompt.
+  jobfinder_max_age_days?: number;
+  jobfinder_include_agencies?: boolean;
+  jobfinder_verify_links?: boolean;
   // Workflow 4 ("Accommodation Finder") keys carry an `accom_` prefix.
   accom_max_results?: number;
   accom_max_age_days?: number;
