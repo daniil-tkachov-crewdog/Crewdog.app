@@ -20,7 +20,7 @@ if (!enabled) {
 // of OpenAI calls the turn actually made.
 export function recordChatCall(
   req,
-  { model, agent, agentCalls, usage, status, startedAt, error } = {}
+  { model, agent, agentCalls, usage, status, startedAt, error, mode } = {}
 ) {
   const u = usage ?? {};
   const row = {
@@ -29,6 +29,9 @@ export function recordChatCall(
     user_agent: String(req?.headers?.["user-agent"] ?? "").slice(0, 500) || null,
     origin: String(req?.headers?.origin ?? req?.headers?.referer ?? "").slice(0, 300) || null,
     model: model ?? null,
+    // Which chat path the turn took: "normal" (tools and sub-agents) or "pro"
+    // (one direct call under the structured-output schema).
+    mode: mode ?? null,
     agent: !!agent,
     agent_calls: Array.isArray(agentCalls) && agentCalls.length ? agentCalls : null,
     requests: u.requests ?? 0,
@@ -46,7 +49,7 @@ export function recordChatCall(
   console.log(
     `[chat] user=${row.user_id ?? "-"} ip=${row.ip_prefix ?? "-"} model=${
       row.model ?? "-"
-    } agent=${row.agent} requests=${row.requests} tokens=${row.total_tokens} status=${
+    } mode=${row.mode ?? "-"} agent=${row.agent} requests=${row.requests} tokens=${row.total_tokens} status=${
       row.status ?? "-"
     }${row.error ? ` error=${row.error}` : ""}${
       row.agent_calls ? ` agent_calls=${JSON.stringify(row.agent_calls)}` : ""
@@ -55,20 +58,33 @@ export function recordChatCall(
 
   if (!enabled) return;
 
-  fetch(`${SUPABASE_URL}/rest/v1/app_chat_calls`, {
-    method: "POST",
-    headers: {
-      apikey: SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-      "Content-Type": "application/json",
-      Prefer: "return=minimal",
-    },
-    body: JSON.stringify(row),
-  })
+  const insert = (body) =>
+    fetch(`${SUPABASE_URL}/rest/v1/app_chat_calls`, {
+      method: "POST",
+      headers: {
+        apikey: SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify(body),
+    });
+
+  insert(row)
     .then(async (res) => {
-      if (!res.ok) {
-        console.error(`[chatlog] HTTP ${res.status}: ${await res.text()}`);
+      if (res.ok) return;
+      const text = await res.text();
+      // Until the pro_mode migration is applied, PostgREST does not know the
+      // `mode` column and rejects the whole row. A deploy that lands before the
+      // migration must not lose its log trail, so retry without it.
+      if (text.includes("PGRST204") || text.includes("mode")) {
+        const { mode: _dropped, ...rest } = row;
+        const retry = await insert(rest);
+        if (retry.ok) return;
+        console.error(`[chatlog] HTTP ${retry.status}: ${await retry.text()}`);
+        return;
       }
+      console.error(`[chatlog] HTTP ${res.status}: ${text}`);
     })
     .catch((err) => console.error("[chatlog]", err?.message || err));
 }

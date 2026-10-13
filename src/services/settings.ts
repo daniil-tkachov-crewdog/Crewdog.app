@@ -97,6 +97,16 @@ export type AppSettings = {
   // Kill switch for the paid Lusha contact lookup on LinkedIn cards. The server
   // reads this itself; this copy only drives the admin toggle.
   lusha_enabled: boolean;
+  // Pro mode: a second chat path with its own prompt, its own API settings and
+  // a required JSON output shape. Deliberately separate columns rather than a
+  // shared record, so changing one mode cannot move the other.
+  pro_system_prompt: string;
+  // The OpenAI Structured Outputs schema, stored as text so the formatting the
+  // admin typed survives. Parsed before use; see proSchema.js for the default.
+  pro_json_schema: string;
+  pro_chat_model: string;
+  pro_web_search: boolean;
+  pro_file_search: boolean;
   agent_config: AgentConfig;
   seo: SeoSettings;
   usage_limits: UsageLimits;
@@ -114,6 +124,11 @@ const DEFAULTS: AppSettings = {
   job_finder_enabled: false,
   accommodation_finder_enabled: false,
   lusha_enabled: false,
+  pro_system_prompt: "",
+  pro_json_schema: "",
+  pro_chat_model: "gpt-4o",
+  pro_web_search: true,
+  pro_file_search: false,
   agent_config: {},
   seo: {},
   usage_limits: {},
@@ -123,7 +138,7 @@ export async function getSettings(): Promise<AppSettings> {
   // Authenticated users can read the full row directly (RLS: authenticated).
   const { data, error } = await supabase
     .from("app_settings")
-    .select("chat_model, web_search, file_search, system_prompt, user_prompt_addition, agent_enabled, linkedin_finder_enabled, job_finder_enabled, accommodation_finder_enabled, lusha_enabled, agent_config, seo, usage_limits, updated_at")
+    .select("chat_model, web_search, file_search, system_prompt, user_prompt_addition, agent_enabled, linkedin_finder_enabled, job_finder_enabled, accommodation_finder_enabled, lusha_enabled, pro_system_prompt, pro_json_schema, pro_chat_model, pro_web_search, pro_file_search, agent_config, seo, usage_limits, updated_at")
     .eq("id", "global")
     .maybeSingle();
   if (!error && data) return { ...DEFAULTS, ...data };

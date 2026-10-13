@@ -3,7 +3,16 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
-import { Copy, Check, Paperclip, X, FileText, Square, Menu } from "lucide-react";
+import {
+  Copy,
+  Check,
+  Paperclip,
+  X,
+  FileText,
+  Square,
+  Menu,
+  ChevronDown,
+} from "lucide-react";
 import { Wordmark, ThemeToggle } from "@/components/layout/chrome";
 import { renderRichText } from "@/components/chat/richtext";
 import {
@@ -35,6 +44,19 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
+
+// The two chat paths, as the composer switcher offers them. Normal routes the
+// message through the agent workflows; Pro asks the model directly and gets its
+// results back under a fixed JSON schema. Both are configured in the admin
+// panel, separately.
+type ChatMode = "normal" | "pro";
+
+const MODE_STORAGE_KEY = "crewdog.chat_mode";
+
+const MODES: { key: ChatMode; label: string; hint: string }[] = [
+  { key: "normal", label: "Normal", hint: "Agents search and report back" },
+  { key: "pro", label: "Pro", hint: "Direct search, structured results" },
+];
 
 type Message = {
   id: string;
@@ -301,6 +323,15 @@ const Chat: React.FC = () => {
   const [activeId, setActiveId] = React.useState(conversations[0].id);
   const [input, setInput] = React.useState("");
   const [thinking, setThinking] = React.useState(false);
+  // Which path the next message takes. Remembered across reloads: a user who
+  // picked Pro meant it for more than one message.
+  const [mode, setMode] = React.useState<ChatMode>(() => {
+    try {
+      return localStorage.getItem(MODE_STORAGE_KEY) === "pro" ? "pro" : "normal";
+    } catch {
+      return "normal";
+    }
+  });
   // Attached CV (decoded to text) that rides along with the next message.
   const [cv, setCv] = React.useState<AttachedCv | null>(null);
   const [cvModalOpen, setCvModalOpen] = React.useState(false);
@@ -315,6 +346,14 @@ const Chat: React.FC = () => {
   const [usageKey, setUsageKey] = React.useState(0);
   // The sidebar is a permanent column on desktop and a drawer on phones.
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(MODE_STORAGE_KEY, mode);
+    } catch {
+      /* private mode: the choice just won't survive a reload */
+    }
+  }, [mode]);
+
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -473,21 +512,38 @@ const Chat: React.FC = () => {
           // The server meters usage per user, so every turn is authenticated.
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({
-          messages: outgoing,
-          model: settings.chat_model,
-          webSearch: settings.web_search,
-          fileSearch: settings.file_search,
-          systemPrompt: settings.system_prompt,
-          userPromptAddition: settings.user_prompt_addition,
-          agent: {
-            enabled: settings.agent_enabled,
-            linkedin_finder_enabled: settings.linkedin_finder_enabled,
-            job_finder_enabled: settings.job_finder_enabled,
-            accommodation_finder_enabled: settings.accommodation_finder_enabled,
-            config: settings.agent_config ?? {},
-          },
-        }),
+        // The two modes read two separate sets of admin settings, and Pro
+        // sends no agent block at all — that is what stops the server from
+        // offering the workflow tools. The response shape is the same either
+        // way, so everything below this call is shared.
+        body: JSON.stringify(
+          mode === "pro"
+            ? {
+                mode: "pro",
+                messages: outgoing,
+                model: settings.pro_chat_model,
+                webSearch: settings.pro_web_search,
+                fileSearch: settings.pro_file_search,
+                systemPrompt: settings.pro_system_prompt,
+                jsonSchema: settings.pro_json_schema,
+              }
+            : {
+                mode: "normal",
+                messages: outgoing,
+                model: settings.chat_model,
+                webSearch: settings.web_search,
+                fileSearch: settings.file_search,
+                systemPrompt: settings.system_prompt,
+                userPromptAddition: settings.user_prompt_addition,
+                agent: {
+                  enabled: settings.agent_enabled,
+                  linkedin_finder_enabled: settings.linkedin_finder_enabled,
+                  job_finder_enabled: settings.job_finder_enabled,
+                  accommodation_finder_enabled: settings.accommodation_finder_enabled,
+                  config: settings.agent_config ?? {},
+                },
+              }
+        ),
       });
       if (res.status === 401) {
         toast.error("Log in to chat with Crewdog.");
@@ -967,6 +1023,42 @@ const Chat: React.FC = () => {
               rows={1}
               className="max-h-[150px] min-h-[30px] flex-1 resize-none bg-transparent py-[5px] text-[15px] leading-[1.55] text-[#1A1917] outline-none placeholder:text-[#6E6B64] dark:text-[#ECEBE8] dark:placeholder:text-[#96938C]"
             />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  disabled={thinking}
+                  aria-label={`Search mode: ${mode === "pro" ? "Pro" : "Normal"}`}
+                  title="Search mode"
+                  className={`flex h-9 shrink-0 items-center gap-[5px] rounded-full border px-[11px] text-[13px] font-medium transition-[background,color,border-color] duration-150 disabled:pointer-events-none disabled:opacity-40 ${
+                    mode === "pro"
+                      ? "border-[rgba(224,72,15,0.3)] bg-[rgba(224,72,15,0.08)] text-[#E0480F] hover:bg-[rgba(224,72,15,0.14)] dark:border-[rgba(255,90,31,0.34)] dark:bg-[rgba(255,90,31,0.12)] dark:text-[#FF5A1F] dark:hover:bg-[rgba(255,90,31,0.18)]"
+                      : "border-[rgba(26,25,23,0.14)] text-[#6E6B64] hover:bg-[rgba(26,25,23,0.06)] hover:text-[#1A1917] dark:border-[rgba(255,255,255,0.12)] dark:text-[#96938C] dark:hover:bg-[rgba(255,255,255,0.07)] dark:hover:text-[#ECEBE8]"
+                  }`}
+                >
+                  {mode === "pro" ? "Pro" : "Normal"}
+                  <ChevronDown className="h-[13px] w-[13px] opacity-70" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" side="top" className="w-60">
+                {MODES.map((m) => (
+                  <DropdownMenuItem
+                    key={m.key}
+                    onSelect={() => setMode(m.key)}
+                    className="flex items-start gap-2"
+                  >
+                    <Check
+                      className={`mt-[3px] h-[14px] w-[14px] shrink-0 ${
+                        mode === m.key ? "opacity-100" : "opacity-0"
+                      }`}
+                    />
+                    <span className="flex flex-col">
+                      <span className="text-[13.5px] font-medium">{m.label}</span>
+                      <span className="text-[12px] text-muted-foreground">{m.hint}</span>
+                    </span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <button
               onClick={() => (thinking ? stop() : send())}
               disabled={!thinking && !canSend}

@@ -18,12 +18,14 @@ import { runJobFinder } from "./jobFinder.js";
 import { runAccommodationFinder } from "./accommodationFinder.js";
 import {
   toCardGroup,
+  fromProJson,
   CARDS_PRESENTATION,
   SUGGESTIONS_CONTRACT,
   SUGGESTIONS_TAIL,
   WORKFLOW_CONTRACT,
   splitSuggestions,
 } from "./chatResults.js";
+import { PRO_SCHEMA_DEFAULT, PRO_SCHEMA_DEFAULT_TEXT } from "./proSchema.js";
 
 // Function tools the chat model can call, by name. Each takes
 // (openai, args, config, model) and resolves to { result, usage }.
@@ -33,6 +35,43 @@ const AGENT_HANDLERS = {
   find_jobs: runJobFinder,
   find_accommodation: runAccommodationFinder,
 };
+
+// The conversation as the Responses API wants it. Both chat paths send the same
+// history; only what rides alongside it differs.
+function toModelInput(messages) {
+  return messages.map((m) => ({
+    role: m.role === "assistant" ? "assistant" : "user",
+    content: String(m.content ?? ""),
+  }));
+}
+
+// Pro mode's `text.format`, built from the schema saved in the admin panel.
+//
+// A bad paste in the panel must not take Pro mode down, so an unparseable or
+// structurally wrong schema falls back to the built-in default — the same
+// fail-safe the tool-argument prompts use. Returning something always is the
+// point: without a format, Pro mode would answer in prose and render no cards.
+function proFormat(raw) {
+  for (const src of [raw, PRO_SCHEMA_DEFAULT]) {
+    try {
+      const parsed = typeof src === "string" ? JSON.parse(src) : src;
+      if (parsed?.schema?.type !== "object") continue;
+      // The API only accepts [a-zA-Z0-9_-] here, and the name is a label, so a
+      // sanitised one is better than a 400 on an otherwise valid schema.
+      const name =
+        String(parsed.name ?? "").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64) ||
+        "crewdog_pro_search";
+      return {
+        type: "json_schema",
+        name,
+        strict: parsed.strict !== false,
+        schema: parsed.schema,
+      };
+    } catch {
+      /* try the default next */
+    }
+  }
+}
 
 // A log-sized record of one workflow run: the criteria the model chose and how
 // many people survived each stage. Deliberately counts, not people — the log is
@@ -152,6 +191,13 @@ app.get("/api/models", async (_req, res) => {
     console.error("[/api/models]", err?.message || err);
     res.status(500).json({ error: "Could not load models" });
   }
+});
+
+// GET /api/pro-schema — the built-in Pro output schema, so the admin panel's
+// "Reset to default" button has one source of truth to read rather than a
+// second copy of the schema living in the frontend bundle.
+app.get("/api/pro-schema", (_req, res) => {
+  res.type("application/json").send(PRO_SCHEMA_DEFAULT_TEXT);
 });
 
 // POST /api/extract-cv  { dataBase64, filename? }
@@ -294,6 +340,7 @@ app.post("/api/chat", async (req, res) => {
   };
   let loggedModel = null;
   let loggedAgent = false;
+  let loggedMode = null;
   // What the model actually asked each workflow for, and what came back. Without
   // this a disappointing answer is unattributable: you cannot tell a criterion
   // the model silently dropped from one the search genuinely could not fill.
@@ -309,6 +356,7 @@ app.post("/api/chat", async (req, res) => {
       status,
       startedAt,
       error,
+      mode: loggedMode,
     });
 
   try {
@@ -320,7 +368,12 @@ app.post("/api/chat", async (req, res) => {
       systemPrompt: sysOverride,
       userPromptAddition,
       agent,
+      mode,
+      jsonSchema,
     } = req.body ?? {};
+    // Set before the gates below, so a turn refused for auth or a spent limit
+    // still records which mode the user was trying to use.
+    loggedMode = mode === "pro" ? "pro" : "normal";
     if (!Array.isArray(messages) || messages.length === 0) {
       log(400);
       return res.status(400).json({ error: "messages[] is required" });
@@ -358,6 +411,81 @@ app.post("/api/chat", async (req, res) => {
     }
 
     const activeModel = model || DEFAULT_MODEL;
+    const isPro = mode === "pro";
+
+    const bumpUsage = (r) => {
+      const u = r?.usage ?? {};
+      usage.requests += 1;
+      usage.input_tokens += u.input_tokens ?? 0;
+      usage.output_tokens += u.output_tokens ?? 0;
+      usage.total_tokens += u.total_tokens ?? 0;
+      // Cached input bills at 10% of the input rate; it is already included in
+      // input_tokens, so it is tracked separately and discounted in toUnits().
+      usage.cached_tokens += u.input_tokens_details?.cached_tokens ?? 0;
+    };
+
+    // ---- Pro mode -----------------------------------------------------------
+    //
+    // One call and nothing else: no function tools, so no sub-agents, no hop
+    // loop, and none of the contracts Normal mode appends to the system prompt.
+    // The schema does that job instead — it is what makes the model write the
+    // cards itself, and `strict: true` is what makes the shape reliable.
+    //
+    // The response body is deliberately identical to Normal mode's, so the chat
+    // page, the card renderer and the message store need no idea this happened.
+    if (isPro) {
+      loggedModel = activeModel;
+
+      const proTools = [];
+      if (webSearch) proTools.push({ type: "web_search" });
+      if (fileSearch) proTools.push({ type: "file_search" });
+
+      const response = await openai.responses.create({
+        model: activeModel,
+        instructions: String(sysOverride ?? "").trim(),
+        input: toModelInput(messages),
+        tools: proTools.length ? proTools : undefined,
+        text: { format: proFormat(jsonSchema) },
+      });
+      bumpUsage(response);
+
+      const committed = await recordUsage(req.accessToken, plan, usage);
+      const raw = response.output_text ?? "";
+
+      let payload = null;
+      try {
+        payload = fromProJson(JSON.parse(raw));
+      } catch {
+        /* handled below */
+      }
+
+      if (!payload) {
+        // Strict mode makes an off-schema answer impossible, so getting here
+        // means the model refused or the output was cut short. The tokens are
+        // spent either way, so hand back whatever words came out rather than
+        // swallowing the turn — and log it as a failure so it is visible.
+        log(502, "pro: output was not parseable JSON");
+        return res.json({
+          reply: raw,
+          suggestions: [],
+          results: [],
+          model: activeModel,
+          usage,
+          limits: committed ?? undefined,
+        });
+      }
+
+      log(200);
+      return res.json({
+        reply: payload.reply,
+        suggestions: payload.suggestions,
+        results: payload.results,
+        model: activeModel,
+        usage,
+        limits: committed ?? undefined,
+      });
+    }
+
     const agentEnabled = !!agent?.enabled;
     const finderEnabled = !!agent?.linkedin_finder_enabled;
     const jobFinderEnabled = !!agent?.job_finder_enabled;
@@ -497,10 +625,7 @@ app.post("/api/chat", async (req, res) => {
       : `${baseInstructions}\n\n${suggestionsContract}`.trim();
     const addition = typeof userPromptAddition === "string" ? userPromptAddition.trim() : "";
 
-    const input = messages.map((m) => ({
-      role: m.role === "assistant" ? "assistant" : "user",
-      content: String(m.content ?? ""),
-    }));
+    const input = toModelInput(messages);
     // Attach the hidden instruction to the latest user message (invisible to the user).
     if (addition) {
       for (let i = input.length - 1; i >= 0; i--) {
@@ -510,17 +635,6 @@ app.post("/api/chat", async (req, res) => {
         }
       }
     }
-
-    const bumpUsage = (r) => {
-      const u = r?.usage ?? {};
-      usage.requests += 1;
-      usage.input_tokens += u.input_tokens ?? 0;
-      usage.output_tokens += u.output_tokens ?? 0;
-      usage.total_tokens += u.total_tokens ?? 0;
-      // Cached input bills at 10% of the input rate; it is already included in
-      // input_tokens, so it is tracked separately and discounted in toUnits().
-      usage.cached_tokens += u.input_tokens_details?.cached_tokens ?? 0;
-    };
 
     let response = await openai.responses.create({
       model: activeModel,

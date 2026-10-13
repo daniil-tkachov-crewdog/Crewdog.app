@@ -244,3 +244,56 @@ export function splitSuggestions(reply) {
     .slice(0, 4);
   return { text: text.slice(0, at).trim(), suggestions };
 }
+
+// Pro mode's answer, turned into the same cards Normal mode produces.
+//
+// Normal mode builds a group per tool call (toCardGroup above); Pro mode has no
+// tools, so the model returns the groups itself under the Structured Outputs
+// schema in proSchema.js. Strict mode guarantees the shape, so this is not
+// validation — it is the two small translations the schema cannot express:
+// summary steps come back as {label, text} objects because strict JSON Schema
+// has no tuples, and every optional field comes back as an explicit null
+// because strict mode forbids omitting a key. The cards want tuples and absent
+// keys, so both are converted here rather than in the renderer.
+export function fromProJson(parsed) {
+  const groups = Array.isArray(parsed?.results) ? parsed.results : [];
+  const results = [];
+
+  for (const g of groups) {
+    const kind = str(g?.kind);
+    if (!["jobs", "places", "people"].includes(kind)) continue;
+
+    const items = (Array.isArray(g?.items) ? g.items : [])
+      .map((item) => {
+        const out = {};
+        for (const [k, v] of Object.entries(item ?? {})) {
+          // A null here means "the model had nothing", which for the cards is
+          // the same as the key never being there — they test for truthiness.
+          if (v === null || v === undefined) continue;
+          out[k] = Array.isArray(v) ? list(v) : typeof v === "string" ? str(v) : v;
+        }
+        return out;
+      })
+      // A row with no link is a row the user cannot act on, and people rows are
+      // identified by name rather than URL.
+      .filter((item) => (kind === "people" ? item.name : item.url));
+
+    if (!items.length) continue;
+
+    const steps = (Array.isArray(g?.summary?.steps) ? g.summary.steps : [])
+      .map((s) => [str(s?.label), str(s?.text)])
+      .filter(([label, text]) => label || text);
+
+    results.push({
+      kind,
+      items,
+      summary: { label: str(g?.summary?.label), steps },
+    });
+  }
+
+  return {
+    reply: str(parsed?.reply),
+    results,
+    suggestions: list(parsed?.suggestions).slice(0, 4),
+  };
+}

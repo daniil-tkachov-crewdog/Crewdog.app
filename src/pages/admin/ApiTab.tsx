@@ -49,10 +49,24 @@ const formatBucket = (iso: string, range: RangeKey) => {
   return d.toLocaleDateString([], { month: "short", year: "2-digit" });
 };
 
+// Normal and Pro are two separate chat paths, so they get two separate sets of
+// API settings. Nothing is shared between them: picking a model here never
+// moves the other mode's model.
+const MODES = [
+  { key: "normal", label: "Normal" },
+  { key: "pro", label: "Pro" },
+] as const;
+
+type ModeKey = (typeof MODES)[number]["key"];
+
 const ApiTab = () => {
+  const [mode, setMode] = useState<ModeKey>("normal");
   const [model, setModel] = useState<string>("");
   const [webSearch, setWebSearch] = useState(false);
   const [fileSearch, setFileSearch] = useState(false);
+  const [proModel, setProModel] = useState<string>("");
+  const [proWebSearch, setProWebSearch] = useState(false);
+  const [proFileSearch, setProFileSearch] = useState(false);
   const [models, setModels] = useState<string[]>([]);
   const [saving, setSaving] = useState<string | null>(null);
   const [usage, setUsage] = useState<UsagePoint[]>([]);
@@ -67,6 +81,9 @@ const ApiTab = () => {
       setModel(s.chat_model);
       setWebSearch(s.web_search);
       setFileSearch(s.file_search);
+      setProModel(s.pro_chat_model);
+      setProWebSearch(s.pro_web_search);
+      setProFileSearch(s.pro_file_search);
       setLimits(s.usage_limits ?? {});
 
       try {
@@ -74,9 +91,11 @@ const ApiTab = () => {
         const d = await r.json();
         const list: string[] = d?.models ?? [];
         // Make sure the current selection is always present.
-        setModels(Array.from(new Set([s.chat_model, ...list])).filter(Boolean));
+        setModels(
+          Array.from(new Set([s.chat_model, s.pro_chat_model, ...list])).filter(Boolean)
+        );
       } catch {
-        setModels([s.chat_model].filter(Boolean));
+        setModels(Array.from(new Set([s.chat_model, s.pro_chat_model])).filter(Boolean));
       }
     })();
   }, []);
@@ -132,18 +151,66 @@ const ApiTab = () => {
     persist({ usage_limits: next }, "limits");
   };
 
+  const isPro = mode === "pro";
+
+  // Each control writes its own column and carries its own saving label —
+  // ApiTab's `saving` is a single string, so a shared label would light the
+  // "Saving…" hint under the wrong switch.
+  const modelValue = isPro ? proModel : model;
+  const setModelValue = (v: string) => {
+    if (isPro) {
+      setProModel(v);
+      persist({ pro_chat_model: v }, "pro-model");
+    } else {
+      setModel(v);
+      persist({ chat_model: v }, "model");
+    }
+  };
+  const webValue = isPro ? proWebSearch : webSearch;
+  const setWebValue = (v: boolean) => {
+    if (isPro) {
+      setProWebSearch(v);
+      persist({ pro_web_search: v }, "pro-web");
+    } else {
+      setWebSearch(v);
+      persist({ web_search: v }, "web");
+    }
+  };
+  const fileValue = isPro ? proFileSearch : fileSearch;
+  const setFileValue = (v: boolean) => {
+    if (isPro) {
+      setProFileSearch(v);
+      persist({ pro_file_search: v }, "pro-file");
+    } else {
+      setFileSearch(v);
+      persist({ file_search: v }, "file");
+    }
+  };
+  const savingLabel = (base: string) => (isPro ? `pro-${base}` : base);
+
   return (
     <div className="max-w-3xl space-y-8">
+      {/* Mode */}
+      <div className="inline-flex rounded-lg border bg-muted/40 p-0.5">
+        {MODES.map((m) => (
+          <button
+            key={m.key}
+            onClick={() => setMode(m.key)}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              mode === m.key
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+
       {/* Model */}
       <section className="space-y-2">
         <label className="text-sm font-medium">ChatGPT model</label>
-        <Select
-          value={model}
-          onValueChange={(v) => {
-            setModel(v);
-            persist({ chat_model: v }, "model");
-          }}
-        >
+        <Select value={modelValue} onValueChange={setModelValue}>
           <SelectTrigger className="w-72">
             <SelectValue placeholder="Select a model" />
           </SelectTrigger>
@@ -156,7 +223,10 @@ const ApiTab = () => {
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          Used for all chats, for every user.{saving === "model" ? " Saving…" : ""}
+          {isPro
+            ? "Used for Pro mode only — the one direct call, with no agents."
+            : "Used for Normal mode: the main chat session and the agents it calls."}
+          {saving === savingLabel("model") ? " Saving…" : ""}
         </p>
       </section>
 
@@ -164,24 +234,18 @@ const ApiTab = () => {
       <section className="space-y-4">
         <div className="flex items-center justify-between max-w-xs">
           <span className="text-sm font-medium">Web Search</span>
-          <Switch
-            checked={webSearch}
-            onCheckedChange={(v) => {
-              setWebSearch(v);
-              persist({ web_search: v }, "web");
-            }}
-          />
+          <Switch checked={webValue} onCheckedChange={setWebValue} />
         </div>
         <div className="flex items-center justify-between max-w-xs">
           <span className="text-sm font-medium">File Search</span>
-          <Switch
-            checked={fileSearch}
-            onCheckedChange={(v) => {
-              setFileSearch(v);
-              persist({ file_search: v }, "file");
-            }}
-          />
+          <Switch checked={fileValue} onCheckedChange={setFileValue} />
         </div>
+        <p className="text-xs text-muted-foreground">
+          {isPro
+            ? "Pro mode has no agents, so these are the only searching it can do."
+            : "For the main chat session. The agents run their own web search regardless."}
+          {saving === savingLabel("web") || saving === savingLabel("file") ? " Saving…" : ""}
+        </p>
       </section>
 
       {/* AI usage limits */}
