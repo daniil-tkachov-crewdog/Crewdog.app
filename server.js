@@ -26,6 +26,12 @@ import {
   splitSuggestions,
 } from "./chatResults.js";
 import { PRO_SCHEMA_DEFAULT, PRO_SCHEMA_DEFAULT_TEXT } from "./proSchema.js";
+import {
+  listSkills,
+  getSkillPrompts,
+  renderSkillMenu,
+  SkillsUnavailableError,
+} from "./proSkills.js";
 
 // Function tools the chat model can call, by name. Each takes
 // (openai, args, config, model) and resolves to { result, usage }.
@@ -452,6 +458,7 @@ app.post("/api/chat", async (req, res) => {
       agent,
       mode,
       jsonSchema,
+      loadedSkills: clientLoadedSkills,
     } = req.body ?? {};
     // Set before the gates below, so a turn refused for auth or a spent limit
     // still records which mode the user was trying to use.
@@ -508,29 +515,175 @@ app.post("/api/chat", async (req, res) => {
 
     // ---- Pro mode -----------------------------------------------------------
     //
-    // One call and nothing else: no function tools, so no sub-agents, no hop
-    // loop, and none of the contracts Normal mode appends to the system prompt.
-    // The schema does that job instead — it is what makes the model write the
-    // cards itself, and `strict: true` is what makes the shape reliable.
+    // No sub-agents: the model searches the web itself and writes the cards
+    // itself, under the strict JSON schema. What it does NOT carry is the
+    // detail of how to run each kind of search — that lives in the skills
+    // table and arrives through load_skill, so a "hello" costs a few hundred
+    // characters of context instead of thirty thousand.
     //
-    // The response body is deliberately identical to Normal mode's, so the chat
-    // page, the card renderer and the message store need no idea this happened.
+    // Pro answers over SSE rather than a single JSON body, purely so the skill
+    // loading is visible while it happens. The final `done` event carries the
+    // exact payload Normal mode returns, so nothing downstream changes.
     if (isPro) {
       loggedModel = activeModel;
+
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+      });
+      const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+      const fail = (status, code, message, error) => {
+        log(status, error ?? message);
+        send({ type: "error", code, error: message });
+        res.end();
+      };
+
+      let menu;
+      try {
+        menu = await listSkills(req.accessToken);
+      } catch (err) {
+        // Without the menu the model does not know a skill exists, so it would
+        // answer from the core prompt alone and quietly produce nothing. Stop.
+        return fail(503, "skills_unavailable",
+          "Crewdog can't reach its skills right now. Try again in a moment.",
+          err?.message || err);
+      }
+
+      const slugs = menu.map((m) => m.slug);
+      const nameOf = (slug) => menu.find((m) => m.slug === slug)?.name ?? slug;
+
+      // Skills already loaded earlier in this conversation. The server holds no
+      // session, so the page carries them forward and they are re-injected up
+      // front — that is what makes "any more?" cost no second load.
+      const loaded = [
+        ...new Set((clientLoadedSkills ?? []).filter((x) => slugs.includes(x))),
+      ];
+      let carried = [];
+      if (loaded.length) {
+        try {
+          carried = await getSkillPrompts(req.accessToken, loaded);
+        } catch (err) {
+          return fail(503, "skills_unavailable",
+            "Crewdog can't reach its skills right now. Try again in a moment.",
+            err?.message || err);
+        }
+      }
+
+      const buildInstructions = (skillBodies) =>
+        [
+          String(sysOverride ?? "").trim(),
+          renderSkillMenu(menu),
+          ...skillBodies.map(
+            (b) => `LOADED SKILL — ${b.name.toUpperCase()}\n\n${b.prompt}`
+          ),
+        ]
+          .filter(Boolean)
+          .join("\n\n");
 
       const proTools = [];
       if (webSearch) proTools.push({ type: "web_search" });
       if (fileSearch) proTools.push({ type: "file_search" });
+      if (slugs.length) {
+        proTools.push({
+          type: "function",
+          name: "load_skill",
+          description:
+            "Load the full instructions for one or more Crewdog skills. Call this before searching or answering whenever a message needs a skill, and ask for every skill you need in a single call.",
+          parameters: {
+            type: "object",
+            additionalProperties: false,
+            required: ["skills"],
+            properties: {
+              skills: {
+                type: "array",
+                description: "The slugs of the skills to load.",
+                items: { type: "string", enum: slugs },
+              },
+            },
+          },
+        });
+      }
 
-      const response = await openai.responses.create({
+      const bodies = [...carried];
+      const format = proFormat(jsonSchema);
+
+      let response = await openai.responses.create({
         model: activeModel,
-        instructions: String(sysOverride ?? "").trim(),
+        instructions: buildInstructions(bodies),
         input: toModelInput(messages),
         tools: proTools.length ? proTools : undefined,
-        text: { format: proFormat(jsonSchema) },
+        text: { format },
       });
       bumpUsage(response);
 
+      // Same three hops Normal mode gets. One is enough for load-then-answer;
+      // the rest cover a model that realises mid-turn it needs another skill.
+      for (let hop = 0; hop < 3; hop++) {
+        const calls = (response.output ?? []).filter(
+          (o) => o.type === "function_call" && o.name === "load_skill"
+        );
+        if (!calls.length) break;
+
+        const toolOutputs = [];
+        for (const call of calls) {
+          let asked = [];
+          try {
+            asked = JSON.parse(call.arguments || "{}")?.skills ?? [];
+          } catch {
+            asked = [];
+          }
+          const fresh = asked.filter((x) => slugs.includes(x) && !loaded.includes(x));
+
+          for (const slug of fresh) send({ type: "status", text: `Loading ${nameOf(slug)}…` });
+
+          let fetched = [];
+          if (fresh.length) {
+            try {
+              fetched = await getSkillPrompts(req.accessToken, fresh);
+            } catch (err) {
+              // Three attempts already failed inside getSkillPrompts. The model
+              // asked for instructions it cannot have, so the honest end to the
+              // turn is to say so rather than let it improvise.
+              return fail(503, "skills_unavailable",
+                "Crewdog can't reach its skills right now. Try again in a moment.",
+                err?.message || err);
+            }
+          }
+
+          for (const b of fetched) {
+            if (!loaded.includes(b.slug)) loaded.push(b.slug);
+            bodies.push(b);
+            send({ type: "status", text: `${b.name} loaded` });
+          }
+          agentCalls.push({ tool: "load_skill", skills: fetched.map((b) => b.slug) });
+
+          toolOutputs.push({
+            type: "function_call_output",
+            call_id: call.call_id,
+            output: fetched.length
+              ? fetched
+                  .map((b) => `SKILL — ${b.name}\n\n${b.prompt}`)
+                  .join("\n\n---\n\n")
+              : "Already loaded, or no such skill. Use what you have.",
+          });
+        }
+
+        // `instructions` is not inherited through previous_response_id, and the
+        // skills now live in it, so it is rebuilt and resent on every hop.
+        response = await openai.responses.create({
+          model: activeModel,
+          instructions: buildInstructions(bodies),
+          previous_response_id: response.id,
+          input: toolOutputs,
+          tools: proTools.length ? proTools : undefined,
+          text: { format },
+        });
+        bumpUsage(response);
+      }
+
+      loggedAgent = loaded.length > 0;
       const committed = await recordUsage(req.accessToken, plan, usage);
       const raw = response.output_text ?? "";
 
@@ -547,25 +700,40 @@ app.post("/api/chat", async (req, res) => {
         // spent either way, so hand back whatever words came out rather than
         // swallowing the turn — and log it as a failure so it is visible.
         log(502, "pro: output was not parseable JSON");
-        return res.json({
+        send({
+          type: "done",
           reply: raw,
           suggestions: [],
           results: [],
+          loadedSkills: loaded,
           model: activeModel,
           usage,
           limits: committed ?? undefined,
         });
+        return res.end();
+      }
+
+      // Cards are built from rules that live in the skills. If the model never
+      // loaded one and produced results anyway, it invented the shape from the
+      // core prompt — drop them, so a missed skill shows up as a missing card
+      // rather than a plausible wrong one.
+      const results = loaded.length ? payload.results : [];
+      if (!loaded.length && payload.results.length) {
+        console.warn("[pro] dropped results built with no skill loaded");
       }
 
       log(200);
-      return res.json({
+      send({
+        type: "done",
         reply: payload.reply,
         suggestions: payload.suggestions,
-        results: payload.results,
+        results,
+        loadedSkills: loaded,
         model: activeModel,
         usage,
         limits: committed ?? undefined,
       });
+      return res.end();
     }
 
     const agentEnabled = !!agent?.enabled;
@@ -815,6 +983,14 @@ app.post("/api/chat", async (req, res) => {
     console.error("[/api/chat]", err?.message || err);
     // Tokens already spent before the throw still belong in the log.
     log(500, err?.message || err);
+    // Pro answers over SSE, so by the time it can throw the headers are often
+    // already out and res.status() would throw on top of the original error.
+    if (res.headersSent) {
+      res.write(
+        `data: ${JSON.stringify({ type: "error", error: "Chat request failed" })}\n\n`
+      );
+      return res.end();
+    }
     res.status(500).json({ error: "Chat request failed" });
   }
 });

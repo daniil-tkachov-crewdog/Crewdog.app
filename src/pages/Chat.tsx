@@ -190,7 +190,54 @@ const THINKING_PHRASES = [
   "Almost got it…",
 ];
 
-const ThinkingIndicator: React.FC = () => {
+// Pro mode answers over SSE so the skill loading is visible while it happens.
+// The final `done` event carries exactly the body Normal mode returns, so the
+// caller gets one object either way and nothing downstream knows the
+// difference.
+type ProStreamError = Error & { code?: string };
+
+async function readProStream(
+  res: Response,
+  onStatus: (text: string) => void
+): Promise<Record<string, unknown>> {
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("no response body");
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let done: Record<string, unknown> | null = null;
+
+  for (;;) {
+    const chunk = await reader.read();
+    if (chunk.done) break;
+    buffer += decoder.decode(chunk.value, { stream: true });
+    // Events are separated by a blank line; anything after the last one is a
+    // partial event and stays in the buffer for the next chunk.
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() ?? "";
+    for (const part of parts) {
+      const line = part.split("\n").find((l) => l.startsWith("data: "));
+      if (!line) continue;
+      let evt: Record<string, unknown>;
+      try {
+        evt = JSON.parse(line.slice(6));
+      } catch {
+        continue;
+      }
+      if (evt.type === "status") onStatus(String(evt.text ?? ""));
+      else if (evt.type === "error") {
+        const err: ProStreamError = new Error(
+          String(evt.error ?? "Chat request failed")
+        );
+        err.code = typeof evt.code === "string" ? evt.code : undefined;
+        throw err;
+      } else if (evt.type === "done") done = evt;
+    }
+  }
+  if (!done) throw new Error("stream ended without a reply");
+  return done;
+}
+
+const ThinkingIndicator: React.FC<{ status?: string | null }> = ({ status }) => {
   const [i, setI] = React.useState(
     () => Math.floor(Math.random() * THINKING_PHRASES.length)
   );
@@ -220,10 +267,10 @@ const ThinkingIndicator: React.FC = () => {
         ))}
       </div>
       <span
-        key={i}
+        key={status ?? i}
         className="chat-phrase text-[14px] text-[#6E6B64] dark:text-[#96938C]"
       >
-        {THINKING_PHRASES[i]}
+        {status || THINKING_PHRASES[i]}
       </span>
       <span className="text-[13px] tabular-nums text-[#96938C] dark:text-[#6E6B64]">
         {formatDuration(elapsed)}
@@ -332,6 +379,10 @@ const Chat: React.FC = () => {
   const [activeId, setActiveId] = React.useState(conversations[0].id);
   const [input, setInput] = React.useState("");
   const [thinking, setThinking] = React.useState(false);
+  // What the server is doing right now, when it bothers to say. Pro reports
+  // its skill loading; everything else leaves this null and the rotating
+  // phrases carry the wait.
+  const [status, setStatus] = React.useState<string | null>(null);
   // Which path the next message takes. Remembered across reloads: a user who
   // picked Pro meant it for more than one message.
   const [mode, setMode] = React.useState<ChatMode>(() => {
@@ -369,6 +420,10 @@ const Chat: React.FC = () => {
   // Maps a conversation's local id -> its DB id. A ref so async callbacks
   // (e.g. the delayed assistant reply) always read the latest value.
   const dbIds = React.useRef<Record<string, string>>({});
+  // Pro skills already loaded, per conversation. The server keeps no session,
+  // so the page carries them forward and a follow-up like "any more?" reuses
+  // the skill instead of paying to load it again.
+  const skillsByConv = React.useRef<Record<string, string[]>>({});
   // In-flight createChat promises, keyed by local id, so the user message and
   // the delayed assistant reply share one insert instead of racing to create two.
   const creating = React.useRef<Record<string, Promise<string>>>({});
@@ -539,6 +594,7 @@ const Chat: React.FC = () => {
                 fileSearch: settings.pro_file_search,
                 systemPrompt: settings.pro_system_prompt,
                 jsonSchema: settings.pro_json_schema,
+                loadedSkills: skillsByConv.current[convId] ?? [],
               }
             : {
                 mode: "normal",
@@ -574,7 +630,12 @@ const Chat: React.FC = () => {
         return;
       }
       if (!res.ok) throw new Error(`chat failed: ${res.status}`);
-      const data = await res.json();
+      const data = res.headers.get("content-type")?.includes("text/event-stream")
+        ? await readProStream(res, setStatus)
+        : await res.json();
+      if (Array.isArray(data?.loadedSkills)) {
+        skillsByConv.current[convId] = data.loadedSkills.map((x: unknown) => String(x));
+      }
       const reply = String(data?.reply ?? "").trim() || "(no response)";
       const results: ResultGroup[] = Array.isArray(data?.results)
         ? data.results
@@ -603,11 +664,17 @@ const Chat: React.FC = () => {
       // A stopped turn is a deliberate user action, not a failure.
       if ((e as Error)?.name !== "AbortError") {
         console.error(e);
-        toast.error("Couldn't reach the assistant. Try again.");
+        const code = (e as ProStreamError)?.code;
+        toast.error(
+          code === "skills_unavailable"
+            ? (e as Error).message
+            : "Couldn't reach the assistant. Try again."
+        );
       }
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
       setThinking(false);
+      setStatus(null);
     }
   };
 
@@ -985,7 +1052,7 @@ const Chat: React.FC = () => {
                     />
                   </div>
                 ))}
-                {thinking && <ThinkingIndicator />}
+                {thinking && <ThinkingIndicator status={status} />}
               </div>
             )}
           </div>
