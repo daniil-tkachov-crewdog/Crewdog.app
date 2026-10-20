@@ -64,9 +64,11 @@ const ApiTab = () => {
   const [model, setModel] = useState<string>("");
   const [webSearch, setWebSearch] = useState(false);
   const [fileSearch, setFileSearch] = useState(false);
+  const [voiceInput, setVoiceInput] = useState(true);
   const [proModel, setProModel] = useState<string>("");
   const [proWebSearch, setProWebSearch] = useState(false);
   const [proFileSearch, setProFileSearch] = useState(false);
+  const [proVoiceInput, setProVoiceInput] = useState(true);
   const [models, setModels] = useState<string[]>([]);
   const [saving, setSaving] = useState<string | null>(null);
   const [usage, setUsage] = useState<UsagePoint[]>([]);
@@ -81,9 +83,11 @@ const ApiTab = () => {
       setModel(s.chat_model);
       setWebSearch(s.web_search);
       setFileSearch(s.file_search);
+      setVoiceInput(s.voice_input);
       setProModel(s.pro_chat_model);
       setProWebSearch(s.pro_web_search);
       setProFileSearch(s.pro_file_search);
+      setProVoiceInput(s.pro_voice_input);
       setLimits(s.usage_limits ?? {});
 
       try {
@@ -186,6 +190,16 @@ const ApiTab = () => {
       persist({ file_search: v }, "file");
     }
   };
+  const voiceValue = isPro ? proVoiceInput : voiceInput;
+  const setVoiceValue = (v: boolean) => {
+    if (isPro) {
+      setProVoiceInput(v);
+      persist({ pro_voice_input: v }, "pro-voice");
+    } else {
+      setVoiceInput(v);
+      persist({ voice_input: v }, "voice");
+    }
+  };
   const savingLabel = (base: string) => (isPro ? `pro-${base}` : base);
 
   return (
@@ -245,6 +259,20 @@ const ApiTab = () => {
             ? "Pro mode has no agents, so these are the only searching it can do."
             : "For the main chat session. The agents run their own web search regardless."}
           {saving === savingLabel("web") || saving === savingLabel("file") ? " Saving…" : ""}
+        </p>
+        {/* Voice input is a composer feature, not a model tool — it decides
+            whether the microphone button is offered in this mode. The speech is
+            transcribed and sent as ordinary text, so nothing past the composer
+            behaves differently. */}
+        <div className="flex items-center justify-between max-w-xs">
+          <span className="text-sm font-medium">Voice input</span>
+          <Switch checked={voiceValue} onCheckedChange={setVoiceValue} />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Shows the microphone button in the composer for{" "}
+          {isPro ? "Pro" : "Normal"} mode. Recordings are transcribed and sent
+          as a normal text message.
+          {saving === savingLabel("voice") ? " Saving…" : ""}
         </p>
       </section>
 

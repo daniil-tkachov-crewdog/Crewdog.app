@@ -33,6 +33,7 @@ import {
 import { getSettings, logTokenUsage } from "@/services/settings";
 import { getAccessToken } from "@/lib/supabase";
 import UsageMeter from "@/components/chat/UsageMeter";
+import VoiceButton from "@/components/chat/VoiceButton";
 import { formatCountdown } from "@/services/usage";
 import {
   DropdownMenu,
@@ -298,10 +299,18 @@ const Chat: React.FC = () => {
   // passed down; the server re-reads the flag before it calls Lusha, so this
   // copy only decides what is on screen.
   const [lushaEnabled, setLushaEnabled] = React.useState(false);
+  // Whether the composer offers its microphone, per mode — the admin panel
+  // configures Normal and Pro separately, like every other API setting.
+  const [voiceEnabled, setVoiceEnabled] = React.useState({
+    normal: true,
+    pro: true,
+  });
   React.useEffect(() => {
     let live = true;
     void getSettings().then((s) => {
-      if (live) setLushaEnabled(s.lusha_enabled);
+      if (!live) return;
+      setLushaEnabled(s.lusha_enabled);
+      setVoiceEnabled({ normal: s.voice_input, pro: s.pro_voice_input });
     });
     return () => {
       live = false;
@@ -503,6 +512,10 @@ const Chat: React.FC = () => {
       // invisible to every tab opened beforehand — the cards in those tabs kept
       // rendering without the buttons until a reload, with nothing to say why.
       setLushaEnabled(settings.lusha_enabled);
+      setVoiceEnabled({
+        normal: settings.voice_input,
+        pro: settings.pro_voice_input,
+      });
       const token = await getAccessToken();
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -699,6 +712,14 @@ const Chat: React.FC = () => {
       setCvLoading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  };
+
+  // A finished recording goes out as an ordinary message. Anything already
+  // typed leads, so a half-written line isn't lost by speaking the rest.
+  const sendTranscript = (text: string) => {
+    const typed = input.trim();
+    setInput("");
+    void send(typed ? `${typed} ${text}` : text);
   };
 
   const canSend = (!!input.trim() || !!cv) && !thinking;
@@ -1059,6 +1080,10 @@ const Chat: React.FC = () => {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+            {/* Voice input, switchable per mode in the admin panel. */}
+            {voiceEnabled[mode] && (
+              <VoiceButton disabled={thinking} onTranscript={sendTranscript} />
+            )}
             <button
               onClick={() => (thinking ? stop() : send())}
               disabled={!thinking && !canSend}

@@ -102,6 +102,11 @@ export default {
         "shimmer": {
           "0%": { backgroundPosition: "-200% 0" },
           "100%": { backgroundPosition: "200% 0" }
+        },
+        // Halo around the composer's microphone button while it records.
+        "mic-halo": {
+          "0%": { transform: "scale(1)", opacity: "0.55" },
+          "70%, 100%": { transform: "scale(1.22)", opacity: "0" }
         }
       },
       animation: {
@@ -112,7 +117,8 @@ export default {
         "scale-in": "scale-in 0.2s ease-out",
         "slide-up": "slide-up 0.4s ease-out",
         "glow-pulse": "glow-pulse 2s ease-in-out infinite",
-        "shimmer": "shimmer 2s linear infinite"
+        "shimmer": "shimmer 2s linear infinite",
+        "mic-halo": "mic-halo 1.6s ease-out infinite"
       },
     },
   },

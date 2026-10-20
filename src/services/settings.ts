@@ -88,6 +88,9 @@ export type AppSettings = {
   chat_model: string;
   web_search: boolean;
   file_search: boolean;
+  // Whether the composer offers its microphone button. Speech is transcribed
+  // and sent as ordinary text, so this only controls the button.
+  voice_input: boolean;
   system_prompt: string;
   user_prompt_addition: string;
   agent_enabled: boolean;
@@ -107,6 +110,7 @@ export type AppSettings = {
   pro_chat_model: string;
   pro_web_search: boolean;
   pro_file_search: boolean;
+  pro_voice_input: boolean;
   agent_config: AgentConfig;
   seo: SeoSettings;
   usage_limits: UsageLimits;
@@ -117,6 +121,7 @@ const DEFAULTS: AppSettings = {
   chat_model: "gpt-4o",
   web_search: false,
   file_search: false,
+  voice_input: true,
   system_prompt: "",
   user_prompt_addition: "",
   agent_enabled: false,
@@ -129,6 +134,7 @@ const DEFAULTS: AppSettings = {
   pro_chat_model: "gpt-4o",
   pro_web_search: true,
   pro_file_search: false,
+  pro_voice_input: true,
   agent_config: {},
   seo: {},
   usage_limits: {},
@@ -138,7 +144,7 @@ export async function getSettings(): Promise<AppSettings> {
   // Authenticated users can read the full row directly (RLS: authenticated).
   const { data, error } = await supabase
     .from("app_settings")
-    .select("chat_model, web_search, file_search, system_prompt, user_prompt_addition, agent_enabled, linkedin_finder_enabled, job_finder_enabled, accommodation_finder_enabled, lusha_enabled, pro_system_prompt, pro_json_schema, pro_chat_model, pro_web_search, pro_file_search, agent_config, seo, usage_limits, updated_at")
+    .select("chat_model, web_search, file_search, voice_input, system_prompt, user_prompt_addition, agent_enabled, linkedin_finder_enabled, job_finder_enabled, accommodation_finder_enabled, lusha_enabled, pro_system_prompt, pro_json_schema, pro_chat_model, pro_web_search, pro_file_search, pro_voice_input, agent_config, seo, usage_limits, updated_at")
     .eq("id", "global")
     .maybeSingle();
   if (!error && data) return { ...DEFAULTS, ...data };
