@@ -6,10 +6,19 @@ import { Switch } from "@/components/ui/switch";
 import { ChevronRight, Plus, Trash2 } from "lucide-react";
 import { getSettings, saveSettings } from "@/services/settings";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   listProSkills,
   createProSkill,
   updateProSkill,
   deleteProSkill,
+  uniqueSlug,
   type ProSkill,
 } from "@/services/proSkills";
 import { toast } from "sonner";
@@ -41,6 +50,18 @@ const PromptsTab = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
+
+  // The create dialog. A skill is a name, the one line that advertises it and
+  // the body — asking for all three up front beats creating an empty row and
+  // hoping someone remembers to come back and fill it in.
+  const [addOpen, setAddOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState({
+    name: "",
+    call_instruction: "",
+    prompt: "",
+    auto_with: [] as string[],
+  });
 
   useEffect(() => {
     (async () => {
@@ -120,15 +141,31 @@ const PromptsTab = () => {
     }
   };
 
+  const openAddDialog = () => {
+    setDraft({ name: "", call_instruction: "", prompt: "", auto_with: [] });
+    setAddOpen(true);
+  };
+
   const addSkill = async () => {
-    const name = window.prompt("Skill name", "");
-    if (!name?.trim()) return;
+    const name = draft.name.trim();
+    if (!name) return;
+    setAdding(true);
     try {
-      const created = await createProSkill(name.trim(), skills.length);
+      const created = await createProSkill({
+        name,
+        call_instruction: draft.call_instruction.trim(),
+        prompt: draft.prompt,
+        auto_with: draft.auto_with,
+        sort_order: skills.length,
+      });
       setSkills((list) => [...list, created]);
       setOpen((o) => ({ ...o, [created.id]: true }));
+      setAddOpen(false);
+      toast.success(`${created.name} created`);
     } catch (e: unknown) {
       toast.error(errText(e) || "Could not add the skill");
+    } finally {
+      setAdding(false);
     }
   };
 
@@ -239,7 +276,7 @@ const PromptsTab = () => {
                   instruction until it asks for one.
                 </p>
               </div>
-              <Button variant="outline" size="sm" onClick={addSkill}>
+              <Button variant="outline" size="sm" onClick={openAddDialog}>
                 <Plus className="mr-1 h-4 w-4" />
                 Add skill
               </Button>
@@ -431,6 +468,115 @@ const PromptsTab = () => {
           </section>
         </>
       )}
+
+      <Dialog open={addOpen} onOpenChange={(v) => !adding && setAddOpen(v)}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>New skill</DialogTitle>
+            <DialogDescription>
+              The model sees the name and the call instruction at all times. It only
+              sees the prompt once it decides to load the skill.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Name</label>
+              <Input
+                autoFocus
+                value={draft.name}
+                onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+                placeholder="Job Finder"
+              />
+              <p className="text-xs text-muted-foreground">
+                {draft.name.trim() ? (
+                  <>
+                    The model will call it{" "}
+                    <code>{uniqueSlug(draft.name, skills.map((s) => s.slug))}</code>. The
+                    slug is fixed once created, so a later rename cannot break a
+                    conversation in flight.
+                  </>
+                ) : (
+                  "Used in the panel and in the status line the user sees while it loads."
+                )}
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Call instruction</label>
+              <Textarea
+                value={draft.call_instruction}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, call_instruction: e.target.value }))
+                }
+                rows={2}
+                className="font-mono text-xs"
+                placeholder="Load this when the user is looking for open vacancies…"
+              />
+              <p className="text-xs text-muted-foreground">
+                Always in context — one line, on when to reach for this skill.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Skill prompt</label>
+              <Textarea
+                value={draft.prompt}
+                onChange={(e) => setDraft((d) => ({ ...d, prompt: e.target.value }))}
+                rows={12}
+                spellCheck={false}
+                className="font-mono text-xs"
+                placeholder="The full instructions for this kind of search…"
+              />
+              <p className="text-xs text-muted-foreground">
+                {draft.prompt.length.toLocaleString()} characters, loaded only when this
+                skill is called. Can be left empty and filled in later.
+              </p>
+            </div>
+
+            {skills.length > 0 && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium">Also load with</label>
+                <div className="flex flex-wrap gap-3">
+                  {skills.map((other) => (
+                    <label
+                      key={other.id}
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={draft.auto_with.includes(other.slug)}
+                        onChange={(e) =>
+                          setDraft((d) => ({
+                            ...d,
+                            auto_with: e.target.checked
+                              ? [...d.auto_with, other.slug]
+                              : d.auto_with.filter((x) => x !== other.slug),
+                          }))
+                        }
+                      />
+                      {other.name}
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Attach this skill to others so it loads with them. For reference
+                  material the model would not think to ask for.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)} disabled={adding}>
+              Cancel
+            </Button>
+            <Button onClick={addSkill} disabled={adding || !draft.name.trim()}>
+              {adding ? "Creating…" : "Create skill"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Button onClick={save} disabled={saving || !!schemaError}>
         {saving ? "Saving…" : "Save"}

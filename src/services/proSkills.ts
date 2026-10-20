@@ -45,17 +45,40 @@ export async function listProSkills(): Promise<ProSkill[]> {
   return (data ?? []).map((r) => ({ ...r, auto_with: r.auto_with ?? [] })) as ProSkill[];
 }
 
-export async function createProSkill(name: string, sortOrder: number): Promise<ProSkill> {
+// The slug is unique in the database, so a second "Job Finder" needs its own
+// rather than a failed insert the admin has to decode. Exported so the create
+// dialog can show the same answer before the insert happens.
+export function uniqueSlug(name: string, taken: string[]): string {
   const base = slugify(name) || "skill";
-  // The slug is unique in the database, so a second "Job Finder" needs a
-  // different one rather than a failed insert the admin has to decode.
-  const existing = await listProSkills();
   let slug = base;
-  for (let n = 2; existing.some((s) => s.slug === slug); n++) slug = `${base}_${n}`;
+  for (let n = 2; taken.includes(slug); n++) slug = `${base}_${n}`;
+  return slug;
+}
+
+export type NewProSkill = {
+  name: string;
+  call_instruction?: string;
+  prompt?: string;
+  enabled?: boolean;
+  auto_with?: string[];
+  sort_order?: number;
+};
+
+export async function createProSkill(skill: NewProSkill): Promise<ProSkill> {
+  const existing = await listProSkills();
+  const slug = uniqueSlug(skill.name, existing.map((s) => s.slug));
 
   const { data, error } = await supabase
     .from("app_pro_skills")
-    .insert({ slug, name, sort_order: sortOrder })
+    .insert({
+      slug,
+      name: skill.name,
+      call_instruction: skill.call_instruction ?? "",
+      prompt: skill.prompt ?? "",
+      enabled: skill.enabled ?? true,
+      auto_with: skill.auto_with ?? [],
+      sort_order: skill.sort_order ?? existing.length,
+    })
     .select(COLUMNS)
     .single();
   if (error) throw new Error(error.message);
