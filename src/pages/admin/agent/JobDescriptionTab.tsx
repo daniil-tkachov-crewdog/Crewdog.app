@@ -2,7 +2,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type { AgentConfig } from "@/services/settings";
-import { JOB_DESCRIPTION_DEFAULTS as D } from "../../../../agentPrompts.js";
+import { JOB_DESCRIPTION_DEFAULTS as D } from "../../../../server/agentPrompts.js";
 import PromptField from "./PromptField";
 
 type Props = {

@@ -178,10 +178,10 @@ const AUDIO_EXTENSIONS = {
   "audio/x-wav": "wav",
 };
 
-// System prompt lives in app/prompts/system.md so it can be edited without code changes.
+// System prompt lives in server/prompts/system.md so it can be edited without code changes.
 function systemPrompt() {
   try {
-    return readFileSync(path.join(__dirname, "app/prompts/system.md"), "utf8").trim();
+    return readFileSync(path.join(__dirname, "prompts/system.md"), "utf8").trim();
   } catch {
     return "";
   }
@@ -1163,7 +1163,8 @@ function renderSeoBlock(seo) {
 }
 
 // Serve the built SPA and let client-side routing handle everything else.
-const dist = path.join(__dirname, "dist");
+// Vite writes dist/ to the repository root, one level above this file.
+const dist = path.join(__dirname, "..", "dist");
 const indexPath = path.join(dist, "index.html");
 const SEO_BLOCK = /<!-- SEO:START -->[\s\S]*?<!-- SEO:END -->/;
 

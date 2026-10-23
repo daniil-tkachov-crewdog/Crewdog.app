@@ -1,7 +1,7 @@
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import type { AgentConfig } from "@/services/settings";
-import { LINKEDIN_FINDER_DEFAULTS as D } from "../../../../agentPrompts.js";
+import { LINKEDIN_FINDER_DEFAULTS as D } from "../../../../server/agentPrompts.js";
 import PromptField from "./PromptField";
 
 type Props = {

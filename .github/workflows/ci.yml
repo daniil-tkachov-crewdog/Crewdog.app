@@ -48,7 +48,7 @@ jobs:
       # log that they are off and stay off, which is the intended fallback.
       - name: API boots and answers
         run: |
-          OPENAI_API_KEY=sk-dummy PORT=3101 node server.js &
+          OPENAI_API_KEY=sk-dummy PORT=3101 node server/index.js &
           for i in $(seq 1 40); do
             curl -sf -o /dev/null http://localhost:3101/api/health && break
             sleep 0.5

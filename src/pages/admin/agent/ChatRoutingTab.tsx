@@ -3,13 +3,13 @@ import PromptField, { type SetCfg } from "./PromptField";
 import {
   ROUTING_DEFAULTS as R,
   TOOL_PARAM_DEFAULTS as P,
-} from "../../../../agentPrompts.js";
+} from "../../../../server/agentPrompts.js";
 import {
   WORKFLOW_CONTRACT,
   SUGGESTIONS_CONTRACT,
   CARDS_PRESENTATION,
   SUGGESTIONS_TAIL,
-} from "../../../../chatResults.js";
+} from "../../../../server/chatResults.js";
 
 type Props = { cfg: AgentConfig; set: SetCfg };
 
