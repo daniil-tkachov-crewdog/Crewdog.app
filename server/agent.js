@@ -13,7 +13,7 @@ import { JOB_DESCRIPTION_DEFAULTS as DEFAULTS } from "./agentPrompts.js";
 // which made agent.js look like their parent rather than their sibling.
 import { renderTemplate as render } from "./functions/text/renderTemplate.js";
 import { today } from "./functions/date/today.js";
-import { outputText } from "./functions/openai/outputText.js";
+import { runModelStage } from "./workflows/runModelStage.js";
 import { addUsage } from "./functions/openai/addUsage.js";
 import { parseJsonOrDefault as parseJson } from "./functions/json/parseJsonOrDefault.js";
 
@@ -39,19 +39,20 @@ export async function runJobSearch(openai, args = {}, cfg = {}, model = "gpt-4o"
   }
 
   // 1) Extract company / title / location from the job description.
-  const extractResp = await openai.responses.create({
+  const { data: extracted } = await runModelStage({
+    openai,
     model,
     instructions: c.extract_instructions,
     input: render(c.extract_input || DEFAULTS.extract_input, {
       job_description: jobDescription,
     }),
-  });
-  addUsage(usage, extractResp);
-  const extracted = parseJson(outputText(extractResp), {
-    company: "",
-    company_simplified: "",
-    title: "",
-    location: "",
+    usage,
+    fallback: {
+      company: "",
+      company_simplified: "",
+      title: "",
+      location: "",
+    },
   });
 
   // 2) Verify the company (web search) — only when a company is known.
@@ -62,7 +63,8 @@ export async function runJobSearch(openai, args = {}, cfg = {}, model = "gpt-4o"
     note: extracted.company ? "" : "No company specified; verification skipped.",
   };
   if ((extracted.company || extracted.company_simplified).trim()) {
-    const verifyResp = await openai.responses.create({
+    const { data } = await runModelStage({
+      openai,
       model,
       instructions: c.verify_instructions,
       tools: [{ type: "web_search" }],
@@ -70,16 +72,18 @@ export async function runJobSearch(openai, args = {}, cfg = {}, model = "gpt-4o"
         company: extracted.company || extracted.company_simplified,
         location: extracted.location,
       }),
+      usage,
+      fallback: verification,
     });
-    addUsage(usage, verifyResp);
-    verification = parseJson(outputText(verifyResp), verification);
+    verification = data;
   }
 
   const companyForSearch =
     verification.canonical_name || extracted.company || extracted.company_simplified;
 
   // 3) LinkedIn X-ray search for HR + potential connections (web search).
-  const searchResp = await openai.responses.create({
+  const { data: searchOut } = await runModelStage({
+    openai,
     model,
     instructions: c.search_instructions,
     tools: [{ type: "web_search" }],
@@ -90,9 +94,9 @@ export async function runJobSearch(openai, args = {}, cfg = {}, model = "gpt-4o"
       title: extracted.title,
       location: extracted.location,
     }),
+    usage,
+    fallback: { contacts: [] },
   });
-  addUsage(usage, searchResp);
-  const searchOut = parseJson(outputText(searchResp), { contacts: [] });
   const contacts = Array.isArray(searchOut.contacts)
     ? searchOut.contacts.slice(0, c.max_contacts)
     : [];

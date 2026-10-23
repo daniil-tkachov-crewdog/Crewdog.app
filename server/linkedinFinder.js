@@ -10,9 +10,7 @@
 // result cards need, and a dedupe pass on the profile URL. LinkedIn authwalls
 // anonymous profile GETs, so the search result is all the evidence there is.
 
-import { outputText } from "./functions/openai/outputText.js";
-import { addUsage } from "./functions/openai/addUsage.js";
-import { parseJsonOrDefault as parseJson } from "./functions/json/parseJsonOrDefault.js";
+import { runModelStage } from "./workflows/runModelStage.js";
 import { renderTemplate as render } from "./functions/text/renderTemplate.js";
 import { today } from "./functions/date/today.js";
 import { LINKEDIN_FINDER_DEFAULTS as DEFAULTS } from "./agentPrompts.js";
@@ -47,7 +45,8 @@ export async function runLinkedinFinder(
   // than starting from nothing.
   const history = Array.isArray(ctx.history) ? ctx.history : [];
 
-  const resp = await openai.responses.create({
+  const { data: out } = await runModelStage({
+    openai,
     model,
     instructions: `${prompt}\n\n${outputContract}`,
     tools: [{ type: "web_search" }],
@@ -62,10 +61,9 @@ export async function runLinkedinFinder(
         }),
       },
     ],
+    usage,
+    fallback: { people: [], note: "" },
   });
-  addUsage(usage, resp);
-
-  const out = parseJson(outputText(resp), { people: [], note: "" });
   const raw = Array.isArray(out?.people) ? out.people : [];
 
   // One row per profile URL; anything that is not a personal profile goes.

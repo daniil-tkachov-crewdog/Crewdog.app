@@ -17,9 +17,7 @@
 // the employer rents, and it belongs with the boards. isEmployerSite() decides
 // that from the URL, whatever the search claims.
 
-import { outputText } from "./functions/openai/outputText.js";
-import { addUsage } from "./functions/openai/addUsage.js";
-import { parseJsonOrDefault as parseJson } from "./functions/json/parseJsonOrDefault.js";
+import { runModelStage } from "./workflows/runModelStage.js";
 import { renderTemplate as render } from "./functions/text/renderTemplate.js";
 import { today } from "./functions/date/today.js";
 import { JOB_FINDER_DEFAULTS as DEFAULTS } from "./agentPrompts.js";
@@ -65,7 +63,8 @@ export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o"
   const includeAgencies = c.jobfinder_include_agencies !== false;
   const verifyEnabled = c.jobfinder_verify_links !== false;
 
-  const resp = await openai.responses.create({
+  const { data: out } = await runModelStage({
+    openai,
     model,
     instructions: `${prompt}\n\n${outputContract}`,
     tools: [{ type: "web_search" }],
@@ -82,10 +81,9 @@ export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o"
         }),
       },
     ],
+    usage,
+    fallback: { jobs: [], note: "" },
   });
-  addUsage(usage, resp);
-
-  const out = parseJson(outputText(resp), { jobs: [], note: "" });
   const raw = Array.isArray(out?.jobs) ? out.jobs : [];
 
   // One row per advert URL. Nothing else is thrown away here: a URL shape is a

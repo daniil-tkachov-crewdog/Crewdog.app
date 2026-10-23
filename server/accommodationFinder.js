@@ -17,9 +17,7 @@
 // Everything else the user volunteers (budget, bedrooms, bills included, pets,
 // parking, a date) narrows the search but never blocks it.
 
-import { outputText } from "./functions/openai/outputText.js";
-import { addUsage } from "./functions/openai/addUsage.js";
-import { parseJsonOrDefault as parseJson } from "./functions/json/parseJsonOrDefault.js";
+import { runModelStage } from "./workflows/runModelStage.js";
 import { renderTemplate as render } from "./functions/text/renderTemplate.js";
 import { today } from "./functions/date/today.js";
 import { ACCOMMODATION_FINDER_DEFAULTS as DEFAULTS } from "./agentPrompts.js";
@@ -96,7 +94,8 @@ export async function runAccommodationFinder(openai, args = {}, cfg = {}, model 
       : c.accom_search_instructions_rent;
 
   // Every line of this is an editable field in the admin panel.
-  const searchResp = await openai.responses.create({
+  const { data: out } = await runModelStage({
+    openai,
     model,
     instructions,
     tools: [{ type: "web_search" }],
@@ -116,9 +115,9 @@ export async function runAccommodationFinder(openai, args = {}, cfg = {}, model 
         ? c.accom_conditions_given_rule ?? DEFAULTS.accom_conditions_given_rule
         : c.accom_no_conditions_rule ?? DEFAULTS.accom_no_conditions_rule,
     }),
+    usage,
+    fallback: { places: [], note: "" },
   });
-  addUsage(usage, searchResp);
-  const out = parseJson(outputText(searchResp), { places: [], note: "" });
   const rawPlaces = Array.isArray(out.places) ? out.places : [];
 
   // 4) Dedupe on the normalised listing URL. No cap here: it falls after
