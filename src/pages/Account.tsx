@@ -139,7 +139,7 @@ export default function AccountPage() {
               <TabsList className="mb-8 grid h-auto w-full grid-cols-4 gap-1 bg-transparent p-0">
                 <TabsTrigger value="general" className={tabCls}>
                   <User className="h-4 w-4" />
-                  <span className="hidden sm:inline">Profile</span>
+                  <span className="hidden sm:inline">Profile / CV</span>
                 </TabsTrigger>
                 <TabsTrigger value="history" className={tabCls}>
                   <History className="h-4 w-4" />

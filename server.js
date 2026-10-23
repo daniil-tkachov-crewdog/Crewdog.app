@@ -5,7 +5,13 @@ import path from "node:path";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import OpenAI, { toFile } from "openai";
-import { PDFParse } from "pdf-parse";
+import {
+  CvReaderError,
+  decodePdf,
+  extractCvFields,
+  pdfToText,
+  storeCv,
+} from "./cvReader.js";
 import { runJobSearch } from "./agent.js";
 import { runLinkedinFinder, normalizeUrl } from "./linkedinFinder.js";
 import { lookupContact } from "./lusha.js";
@@ -232,48 +238,67 @@ app.post("/api/extract-cv", async (req, res) => {
       return res.status(400).json({ error: "dataBase64 is required" });
     }
 
-    // Strip an optional data: URL prefix (e.g. "data:application/pdf;base64,").
-    const b64 = dataBase64.includes(",") ? dataBase64.split(",").pop() : dataBase64;
-    let buf;
-    try {
-      buf = Buffer.from(b64, "base64");
-    } catch {
-      return res.status(400).json({ error: "Invalid base64 data" });
-    }
-
-    // Size guard (10 MB) and PDF signature check.
-    if (buf.length > 10 * 1024 * 1024) {
-      return res.status(413).json({ error: "File too large (max 10MB)" });
-    }
-    if (buf.subarray(0, 5).toString("latin1") !== "%PDF-") {
-      return res.status(400).json({ error: "Only PDF files are supported" });
-    }
-
-    const parser = new PDFParse({ data: new Uint8Array(buf) });
-    let text = "";
-    try {
-      const result = await parser.getText();
-      text = String(result?.text ?? "");
-    } finally {
-      await parser.destroy?.();
-    }
-
-    // Drop pdf-parse page markers like "-- 1 of 3 --" and collapse blank runs.
-    text = text
-      .replace(/^-- \d+ of \d+ --$/gm, "")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
-
-    if (!text) {
-      return res
-        .status(422)
-        .json({ error: "Couldn't read any text from this PDF." });
-    }
+    // Decoding, the size guard and the PDF read all live in cvReader.js, which
+    // /api/cv-reader below shares with this route.
+    const buf = decodePdf(dataBase64);
+    const text = await pdfToText(buf);
 
     res.json({ text, filename: filename || "CV.pdf", chars: text.length });
   } catch (err) {
+    if (err instanceof CvReaderError) {
+      return res.status(err.status).json({ error: err.message });
+    }
     console.error("[/api/extract-cv]", err?.message || err);
     res.status(500).json({ error: "Could not read the PDF." });
+  }
+});
+
+// POST /api/cv-reader  { dataBase64, filename? }
+// cv_reader: the account page's CV upload. Reads the PDF, asks the model who
+// this is, stores the file in the private `cvs` bucket and saves the details to
+// the caller's profile. Returns { cv, profile }.
+//
+// This is the same PDF the composer's attach button reads, but a different job:
+// the composer wants text for one prompt and keeps nothing, while this keeps the
+// document and the profile it fills. Hence a second route rather than a flag.
+app.post("/api/cv-reader", async (req, res) => {
+  try {
+    // A CV is personal data stored under an account, and the parse costs money,
+    // so this needs an identity behind it exactly like /api/transcribe. The
+    // storage object and both rows are written as the caller, so the token is
+    // also what the RLS policies check.
+    if (!req.userId) {
+      return res
+        .status(401)
+        .json({ error: "Log in to upload your CV.", code: "auth_required" });
+    }
+    const { dataBase64, filename } = req.body ?? {};
+    if (typeof dataBase64 !== "string" || !dataBase64) {
+      return res.status(400).json({ error: "dataBase64 is required" });
+    }
+
+    const buf = decodePdf(dataBase64);
+    const text = await pdfToText(buf);
+    const fields = await extractCvFields(openai, text);
+    const { cv, profile } = await storeCv({
+      accessToken: req.accessToken,
+      userId: req.userId,
+      buffer: buf,
+      filename: filename || "CV.pdf",
+      fields,
+    });
+
+    console.log(
+      `[cv-reader] user=${req.userId} file=${cv.file_name} chars=${text.length}`
+    );
+    res.json({ cv, profile });
+  } catch (err) {
+    if (err instanceof CvReaderError) {
+      console.error("[cv-reader]", err.message);
+      return res.status(err.status).json({ error: err.message });
+    }
+    console.error("[cv-reader]", err?.message || err);
+    res.status(500).json({ error: "Could not read your CV." });
   }
 });
 
