@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { CheckCircle2 } from "lucide-react";
-import type { Achievement } from "../data/account.types";
+import type { Achievement } from "@/data/account.types";
 
 export default function AchievementsGrid({
   achievements,

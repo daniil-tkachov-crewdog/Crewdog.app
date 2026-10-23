@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";
-import type { ActivityItem } from "../data/account.types";
+import type { ActivityItem } from "@/data/account.types";
 
 export default function ActivityLog({ items }: { items: ActivityItem[] }) {
   return (

@@ -1,0 +1,57 @@
+# Typecheck and build on every push and pull request.
+#
+# The repository had no CI, which is why three imports pointing at files that
+# are not in the tree survived: two of them were `import type`, which esbuild
+# erases before it resolves anything, so `npm run build` stayed green while
+# `tsc` had been failing. A passing build is not evidence the types hold.
+#
+# Lint is deliberately not a gate yet — it reports 79 pre-existing errors, and
+# turning it red on day one trains people to ignore it. Add it once that
+# backlog is cleared.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Must stay at zero. This is the check that would have caught the
+      # dangling imports above.
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      # The API is plain ESM with no test suite yet. Booting it and asking for
+      # /api/health is the cheapest proof that every import still resolves and
+      # every route still mounts — a syntax check would not catch a module
+      # that moved out from under an import.
+      #
+      # A dummy key is enough: the OpenAI client only checks that one is
+      # non-empty at construction, and health makes no outbound call. Without
+      # Supabase credentials the traffic, chat-log and contact-cache writers
+      # log that they are off and stay off, which is the intended fallback.
+      - name: API boots and answers
+        run: |
+          OPENAI_API_KEY=sk-dummy PORT=3101 node server.js &
+          for i in $(seq 1 40); do
+            curl -sf -o /dev/null http://localhost:3101/api/health && break
+            sleep 0.5
+          done
+          curl -sf http://localhost:3101/api/health | grep -q '"ok":true'
+          kill %1

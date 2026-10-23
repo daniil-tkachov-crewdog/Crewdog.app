@@ -74,7 +74,12 @@ export type HistoryResp = {
 };
 
 export type AccountUser = {
-  id: string;
+  // Optional because the only producer of this object, makeUser() in
+  // src/data/account.mock.ts, does not set it, and no consumer reads it —
+  // AccountHeader, ProfileInfo and SubscriptionCard use name, email, quota
+  // and renewalDate only. Declaring it required made every call site a type
+  // error that went unreported while account.types.ts was missing.
+  id?: string;
   name: string;
   email: string;
   plan: "Free" | "Pro" | "Admin" | string;
