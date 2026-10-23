@@ -17,11 +17,17 @@
 // the employer rents, and it belongs with the boards. isEmployerSite() decides
 // that from the URL, whatever the search claims.
 
-import { outputText, addUsage, parseJson, render, today } from "./agent.js";
+import { outputText } from "./functions/openai/outputText.js";
+import { addUsage } from "./functions/openai/addUsage.js";
+import { parseJsonOrDefault as parseJson } from "./functions/json/parseJsonOrDefault.js";
+import { renderTemplate as render } from "./functions/text/renderTemplate.js";
+import { today } from "./functions/date/today.js";
 import { JOB_FINDER_DEFAULTS as DEFAULTS } from "./agentPrompts.js";
 import { verifyLinks, JOB_EXPIRY_PHRASES } from "./linkCheck.js";
 
-const str = (v) => String(v ?? "").trim();
+import { str } from "./functions/text/str.js";
+import { normalizeListingUrl } from "./functions/url/normalizeListingUrl.js";
+import { isEmployerSite } from "./functions/url/isEmployerSite.js";
 
 // Strip tracking params and trailing slashes so the same advert found twice
 // under two campaign URLs collapses to one job. Unlike the LinkedIn finder this
@@ -29,83 +35,11 @@ const str = (v) => String(v ?? "").trim();
 // domain or a board — so the only shape rule is "an http(s) URL with a host".
 const TRACKING_PARAM = /^(utm_|gh_|ref$|source$|src$|trk$|trackid$|campaign)/i;
 
-function normalizeUrl(url) {
-  const raw = str(url);
-  if (!/^https?:\/\//i.test(raw)) return "";
-  try {
-    const u = new URL(raw);
-    if (!u.hostname.includes(".")) return "";
-    for (const key of [...u.searchParams.keys()]) {
-      if (TRACKING_PARAM.test(key)) u.searchParams.delete(key);
-    }
-    u.hash = "";
-    u.hostname = u.hostname.toLowerCase().replace(/^www\./, "");
-    u.pathname = u.pathname.replace(/\/+$/, "") || "/";
-    return u.toString();
-  } catch {
-    return "";
-  }
-}
+// Bound to the job finder's own tracking-parameter list: gh_ is
+// Greenhouse's and is meaningless anywhere else, which is why this list
+// and the accommodation finder's are not merged.
+const normalizeUrl = (url) => normalizeListingUrl(url, TRACKING_PARAM);
 
-// Hosts that are never the hiring company's own website. Two kinds, and the
-// second is the one worth being explicit about: a vacancy on
-// equinix.wd1.myworkdayjobs.com or boards.greenhouse.io/<company> is the
-// employer's own advert in the sense that the application lands on their desk,
-// but it is NOT their career page — it is recruitment software they rent, on
-// somebody else's domain, and the candidate can see that in the URL. The direct
-// group means the company's own site, so everything here is excluded from it.
-//
-// A blocklist, not an allowlist, because the employer's domain is whatever the
-// employer owns and cannot be enumerated. An unknown platform therefore slips
-// through as "direct" until it is named here; the search prompt is the first
-// line of defence and this is the backstop.
-const NOT_EMPLOYER_HOSTS = [
-  // Applicant tracking systems and hosted careers sites.
-  "greenhouse.io", "lever.co", "myworkdayjobs.com", "myworkdaysite.com", "workday.com",
-  "smartrecruiters.com", "teamtailor.com", "workable.com", "ashbyhq.com", "icims.com",
-  "jobvite.com", "bamboohr.com", "recruitee.com", "personio.de", "personio.com",
-  "breezy.hr", "pinpointhq.com", "jazzhr.com", "applytojob.com", "avature.net",
-  "phenompeople.com", "eightfold.ai", "csod.com", "cornerstoneondemand.com",
-  "brassring.com", "silkroad.com", "hirebridge.com", "catsone.com", "clearcompany.com",
-  "dayforcehcm.com", "ultipro.com", "paylocity.com", "paycomonline.net", "adp.com",
-  "rippling.com", "gohire.io", "occupop.com", "peoplehr.net", "tribepad.com",
-  "networxrecruitment.com", "jobtrain.co.uk", "eploy.co.uk", "vacancy-filler.co.uk",
-  "webrecruit.co.uk", "hireful.co.uk", "tal.net", "isolvedhire.com", "polymer.co",
-  "jobs.jobvite.com", "recruiterbox.com", "hrmdirect.com", "snaphunt.com",
-  // Boards, aggregators and professional networks.
-  "linkedin.com", "totaljobs.com", "reed.co.uk", "cv-library.co.uk", "jobserve.com",
-  "jobsite.co.uk", "cwjobs.co.uk", "technojobs.co.uk", "irishjobs.ie", "jobs.ie",
-  "simplyhired.com", "careerbuilder.com", "dice.com", "xing.com", "infojobs.net",
-  "welcometothejungle.com", "otta.com", "wellfound.com", "angel.co", "builtin.com",
-  "efinancialcareers.com", "jobtome.com", "jobrapido.com", "bebee.com", "recruit.net",
-  "learn4good.com", "hiring.cafe", "workinstartups.com", "jobbank.gc.ca", "jobs.ac.uk",
-  "datacenterdynamics.com", "glassdoor.com", "indeed.com",
-];
-
-// The ones with a domain per country (indeed.co.uk, glassdoor.ie, seek.com.au…),
-// plus the platforms whose host varies but whose brand does not.
-const NOT_EMPLOYER_PATTERNS = [
-  /(^|\.)indeed\./, /(^|\.)glassdoor\./, /(^|\.)monster\./, /(^|\.)ziprecruiter\./,
-  /(^|\.)adzuna\./, /(^|\.)jooble\./, /(^|\.)careerjet\./, /(^|\.)trovit\./,
-  /(^|\.)stepstone\./, /(^|\.)seek\.com/, /(^|\.)talent\.com/, /(^|\.)neuvoo\./,
-  /(^|\.)whatjobs\./, /(^|\.)jobstreet\./, /(^|\.)naukri\./, /(^|\.)oraclecloud\.com$/,
-  /(^|\.)successfactors\./, /(^|\.)sapsf\./, /(^|\.)taleo\./, /(^|\.)icims\./,
-  /(^|\.)greenhouse\./, /(^|\.)lever\.co$/, /(^|\.)myworkday/, /(^|\.)smartrecruiters\./,
-  /(^|\.)teamtailor\./, /(^|\.)workable\./, /(^|\.)ashbyhq\./, /(^|\.)jobs\.google\./,
-];
-
-// True when the URL is on a domain the hiring company itself owns — which is
-// everything left once the platforms and the boards are taken out.
-function isEmployerSite(url) {
-  let host;
-  try {
-    host = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
-  } catch {
-    return false;
-  }
-  if (NOT_EMPLOYER_HOSTS.some((d) => host === d || host.endsWith(`.${d}`))) return false;
-  return !NOT_EMPLOYER_PATTERNS.some((re) => re.test(host));
-}
 
 
 export async function runJobFinder(openai, args = {}, cfg = {}, model = "gpt-4o", ctx = {}) {

@@ -3,7 +3,7 @@
 // whether to open a link, and these rows are stored with the message, so the
 // evidence trail and the pipeline's internals stay out.
 
-const str = (v) => (v == null ? "" : String(v).trim());
+import { str } from "./functions/text/str.js";
 const list = (v) => (Array.isArray(v) ? v.map(str).filter(Boolean) : []);
 
 // Where the cards sit in the reply. The model writes this marker on its own line;

@@ -17,11 +17,17 @@
 // Everything else the user volunteers (budget, bedrooms, bills included, pets,
 // parking, a date) narrows the search but never blocks it.
 
-import { outputText, addUsage, parseJson, render, today } from "./agent.js";
+import { outputText } from "./functions/openai/outputText.js";
+import { addUsage } from "./functions/openai/addUsage.js";
+import { parseJsonOrDefault as parseJson } from "./functions/json/parseJsonOrDefault.js";
+import { renderTemplate as render } from "./functions/text/renderTemplate.js";
+import { today } from "./functions/date/today.js";
 import { ACCOMMODATION_FINDER_DEFAULTS as DEFAULTS } from "./agentPrompts.js";
 import { verifyLinks, parsePhrases, PROPERTY_EXPIRY_PHRASES } from "./linkCheck.js";
 
-const str = (v) => String(v ?? "").trim();
+import { str } from "./functions/text/str.js";
+import { normalizeListingUrl } from "./functions/url/normalizeListingUrl.js";
+import { isListingUrl } from "./functions/url/isListingUrl.js";
 
 // Strip tracking params and trailing slashes so the same property found twice
 // under two campaign URLs collapses to one listing. Any host is accepted — a
@@ -29,39 +35,10 @@ const str = (v) => String(v ?? "").trim();
 // page — so the only shape rule is "an http(s) URL with a host".
 const TRACKING_PARAM = /^(utm_|ref$|source$|src$|trk$|trackid$|campaign|cid$|gclid$|fbclid$)/i;
 
-function normalizeUrl(url) {
-  const raw = str(url);
-  if (!/^https?:\/\//i.test(raw)) return "";
-  try {
-    const u = new URL(raw);
-    if (!u.hostname.includes(".")) return "";
-    for (const key of [...u.searchParams.keys()]) {
-      if (TRACKING_PARAM.test(key)) u.searchParams.delete(key);
-    }
-    u.hash = "";
-    u.hostname = u.hostname.toLowerCase().replace(/^www\./, "");
-    u.pathname = u.pathname.replace(/\/+$/, "") || "/";
-    return u.toString();
-  } catch {
-    return "";
-  }
-}
-
-// A portal's search results page or an area landing page is a place to look for
-// a home, not a home. The search prompt says so; this is the backstop for when
-// the model returns one anyway.
-const NOT_A_LISTING =
-  /\/(search|find|results|to-rent|for-rent|property-to-rent|rentals?|listings?|properties)\/?$|[?&](q|query|keywords|search|searchType|locationIdentifier)=/i;
-
-function isListingUrl(url) {
-  try {
-    const u = new URL(url);
-    if (u.pathname === "/" || u.pathname === "") return false;
-    return !NOT_A_LISTING.test(u.pathname + u.search);
-  } catch {
-    return false;
-  }
-}
+// Bound to the accommodation finder's own tracking-parameter list: it
+// strips the ad-click ids (gclid, fbclid, cid) that portals carry and the
+// job finder never sees, which is why the two lists stay separate.
+const normalizeUrl = (url) => normalizeListingUrl(url, TRACKING_PARAM);
 
 export async function runAccommodationFinder(openai, args = {}, cfg = {}, model = "gpt-4o") {
   const c = { ...DEFAULTS, ...cfg };

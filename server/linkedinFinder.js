@@ -10,53 +10,21 @@
 // result cards need, and a dedupe pass on the profile URL. LinkedIn authwalls
 // anonymous profile GETs, so the search result is all the evidence there is.
 
-import { outputText, addUsage, parseJson, render, today } from "./agent.js";
+import { outputText } from "./functions/openai/outputText.js";
+import { addUsage } from "./functions/openai/addUsage.js";
+import { parseJsonOrDefault as parseJson } from "./functions/json/parseJsonOrDefault.js";
+import { renderTemplate as render } from "./functions/text/renderTemplate.js";
+import { today } from "./functions/date/today.js";
 import { LINKEDIN_FINDER_DEFAULTS as DEFAULTS } from "./agentPrompts.js";
 
 // linkedin.com/in/<slug> — anything else (company pages, job posts, search
 // result pages, other domains) is not a person and gets dropped.
-const PROFILE_RE = /^https?:\/\/([a-z0-9-]+\.)*linkedin\.com\/in\/[^/?#\s]+/i;
+import { str } from "./functions/text/str.js";
+import { normalizeLinkedinProfileUrl } from "./functions/url/normalizeLinkedinProfileUrl.js";
+import { nameFromProfileUrl } from "./functions/url/nameFromProfileUrl.js";
 
-// Strip tracking params, trailing slashes and the locale subdomain so the same
-// person found twice under different URLs collapses to one row. Exported
-// because the contact-lookup cache keys on it too: the same person has to be
-// one cache row for the same reason they are one row here.
-export function normalizeUrl(url) {
-  const raw = String(url ?? "").trim();
-  if (!PROFILE_RE.test(raw)) return "";
-  try {
-    const u = new URL(raw);
-    const slug = u.pathname.replace(/\/+$/, "").split("/in/")[1] ?? "";
-    if (!slug) return "";
-    return `https://www.linkedin.com/in/${decodeURIComponent(slug).toLowerCase()}`;
-  } catch {
-    return "";
-  }
-}
-
-// A readable name from the profile slug, for the profiles whose name the search
-// could not read. Without this such a person is dropped on the floor: the card
-// list requires a name, so a nameless row collapses the whole group and the
-// reply falls back to printing bare "Profile" links.
-//
-// linkedin.com/in/jan-de-vries-8b41720a -> "Jan De Vries". The trailing hash
-// LinkedIn appends to disambiguate is dropped; a slug that is all hash, or a
-// single run of letters, yields nothing rather than a nonsense name.
-export function nameFromProfileUrl(url) {
-  const slug = String(url ?? "")
-    .split("/in/")[1]
-    ?.split(/[/?#]/)[0];
-  if (!slug) return "";
-  const words = decodeURIComponent(slug)
-    .split("-")
-    // The disambiguating suffix is hex, so a word with a digit in it is never
-    // part of the name.
-    .filter((w) => w && !/\d/.test(w));
-  if (words.length < 2) return "";
-  return words.map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
-}
-
-const str = (v) => String(v ?? "").trim();
+// Kept as a local alias so the body below reads as it always has.
+const normalizeUrl = normalizeLinkedinProfileUrl;
 
 export async function runLinkedinFinder(
   openai,

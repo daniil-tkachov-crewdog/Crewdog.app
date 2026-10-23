@@ -10,7 +10,7 @@
 // all four pass.
 
 import { Router } from "express";
-import { normalizeUrl } from "../linkedinFinder.js";
+import { normalizeLinkedinProfileUrl } from "../functions/url/normalizeLinkedinProfileUrl.js";
 import { lookupContact } from "../lusha.js";
 import {
   lushaEnabled,
@@ -40,10 +40,10 @@ contactLookupRoute.post("/contact-lookup", async (req, res) => {
       return res.status(400).json({ status: "error", message: "Unknown field." });
     }
 
-    // normalizeUrl returns "" for anything that is not linkedin.com/in/<slug>,
-    // which keeps an arbitrary URL from becoming a billable Lusha call, and
+    // This returns "" for anything that is not linkedin.com/in/<slug>, which
+    // keeps an arbitrary URL from becoming a billable Lusha call, and
     // collapses the same person's variant URLs onto one cache row.
-    const url = normalizeUrl(linkedinUrl);
+    const url = normalizeLinkedinProfileUrl(linkedinUrl);
     if (!url) {
       return res
         .status(400)

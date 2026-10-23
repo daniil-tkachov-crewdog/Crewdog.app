@@ -7,55 +7,15 @@
 
 import { JOB_DESCRIPTION_DEFAULTS as DEFAULTS } from "./agentPrompts.js";
 
-// Fill {{placeholders}} in an admin-edited prompt from the values the run
-// actually has. Every prompt the app sends is editable in the admin panel, and
-// the ones that carry a search's own criteria into the model need somewhere to
-// put them — this is that seam.
-//
-// An unknown placeholder is left exactly as written rather than blanked, so a
-// typo shows up in the prompt instead of silently deleting a line.
-export function render(template, vars = {}) {
-  return String(template ?? "").replace(/\{\{\s*(\w+)\s*\}\}/g, (whole, key) =>
-    key in vars ? String(vars[key] ?? "") : whole
-  );
-}
-
-// Today, as the prompts want to quote it. Every run gets it as a placeholder.
-export const today = () => new Date().toISOString().slice(0, 10);
-
-// Pull the assistant text out of a Responses API result.
-export function outputText(resp) {
-  return resp?.output_text ?? "";
-}
-
-// Sum token usage from a Responses API result into an accumulator. `requests`
-// counts the OpenAI calls themselves, so a turn can be reconciled against the
-// request count on the OpenAI dashboard.
-export function addUsage(acc, resp) {
-  const u = resp?.usage ?? {};
-  acc.input_tokens += u.input_tokens ?? 0;
-  acc.output_tokens += u.output_tokens ?? 0;
-  acc.total_tokens += u.total_tokens ?? 0;
-  acc.requests += 1;
-}
-
-// Best-effort JSON parse (strips code fences / surrounding prose).
-export function parseJson(text, fallback) {
-  if (!text) return fallback;
-  try {
-    return JSON.parse(text);
-  } catch {
-    const m = text.match(/\{[\s\S]*\}/);
-    if (m) {
-      try {
-        return JSON.parse(m[0]);
-      } catch {
-        /* ignore */
-      }
-    }
-    return fallback;
-  }
-}
+// The five helpers this file used to declare — render, today, outputText,
+// addUsage and parseJson — now live one per file under functions/. They were
+// never specific to this workflow; all three finders imported them from here,
+// which made agent.js look like their parent rather than their sibling.
+import { renderTemplate as render } from "./functions/text/renderTemplate.js";
+import { today } from "./functions/date/today.js";
+import { outputText } from "./functions/openai/outputText.js";
+import { addUsage } from "./functions/openai/addUsage.js";
+import { parseJsonOrDefault as parseJson } from "./functions/json/parseJsonOrDefault.js";
 
 export async function runJobSearch(openai, args = {}, cfg = {}, model = "gpt-4o") {
   const c = { ...DEFAULTS, ...cfg };
