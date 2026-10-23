@@ -1,3 +1,10 @@
+// client/features/auth/LoginPage.tsx
+//
+// Sign in and sign up, by password or Google, on one screen.
+//
+// On success it returns the user to wherever RequireAuth bounced them from,
+// which arrives in router state, and falls back to /chat.
+
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";

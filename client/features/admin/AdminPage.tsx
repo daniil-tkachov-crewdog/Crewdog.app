@@ -1,3 +1,9 @@
+// client/features/admin/AdminPage.tsx
+//
+// The admin console: a tab strip over six panels. Reached only through
+// RequireAdmin, and everything it reads and writes is additionally protected
+// by RLS on the tables behind it.
+
 import { useState } from "react";
 import WebTrafficTab from "@/features/admin/tabs/WebTrafficTab";
 import UsersTab from "@/features/admin/tabs/UsersTab";

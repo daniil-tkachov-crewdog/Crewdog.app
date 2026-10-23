@@ -1,3 +1,11 @@
+// client/features/account/components/SearchHistory.tsx
+//
+// The account screen's past-searches list: paged, expandable, with the
+// contacts each search found.
+//
+// Real data, unlike the fixtures beside it — it reads through api/history.ts,
+// and RLS means a user only ever sees their own rows.
+
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {

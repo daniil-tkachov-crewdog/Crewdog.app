@@ -1,3 +1,11 @@
+// client/features/support/components/SupportForm.tsx
+//
+// The contact form. Posts to an n8n webhook rather than to our own API —
+// there is no support inbox in this app, so the message is routed outside it.
+//
+// Borrows the account screen's field styling so the two places it appears
+// look the same.
+
 import { useState } from "react";
 import { toast } from "sonner";
 import { sendSupportMessage } from "@/features/support/api/support";

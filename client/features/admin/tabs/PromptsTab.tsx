@@ -1,3 +1,12 @@
+// client/features/admin/tabs/PromptsTab.tsx
+//
+// Edits the system prompts, the Pro output schema and the Pro skills.
+//
+// The skills are the substance of Pro mode: each is a body of instructions
+// the model loads on demand instead of carrying in every request. The
+// "Reset to default" button reads the built-in schema from /api/pro-schema
+// rather than holding a second copy here, so the two cannot drift.
+
 import { useEffect, useMemo, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";

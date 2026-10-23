@@ -1,3 +1,11 @@
+// client/features/auth/ResetPasswordPage.tsx
+//
+// Sets a new password after following the emailed link.
+//
+// The link carries a recovery token that Supabase turns into a short-lived
+// session when the page loads — so reaching this screen without one means
+// the link was stale or already used, and the form cannot proceed.
+
 import { useEffect, useState } from "react";
 import { supabase } from "@/core/supabase/client";
 import { useAuth } from "@/features/auth/AuthProvider";

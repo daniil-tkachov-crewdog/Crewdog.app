@@ -1,3 +1,13 @@
+// client/features/account/fixtures/account.mock.ts
+//
+// Placeholder content for the account screen.
+//
+// makeUser() is live — the account page calls it for the header and plan
+// label, filling in the real name and email from the session. The three
+// lists below it are not: they are design fixtures for the achievements,
+// activity and history sections, and nothing imports them. Real history
+// comes from api/history.ts.
+
 import { Award, Briefcase, Crown, Star, Target } from "lucide-react";
 import type {
   AccountUser,

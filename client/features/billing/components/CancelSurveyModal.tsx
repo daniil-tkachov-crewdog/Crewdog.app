@@ -1,3 +1,8 @@
+// client/features/billing/components/CancelSurveyModal.tsx
+//
+// Asks why, then cancels. The answer is recorded for product reasons and is
+// not a condition of cancelling — the flow completes either way.
+
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";

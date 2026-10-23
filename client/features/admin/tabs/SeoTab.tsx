@@ -1,3 +1,11 @@
+// client/features/admin/tabs/SeoTab.tsx
+//
+// Edits the metadata the server renders into index.html for crawlers.
+//
+// Saving here changes what every crawler sees within a minute — the server
+// caches the row for that long — without a deploy. The FAQ entries become
+// FAQPage structured data.
+
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";

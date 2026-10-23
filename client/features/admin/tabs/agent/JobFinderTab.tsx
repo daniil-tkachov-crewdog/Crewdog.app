@@ -1,3 +1,9 @@
+// client/features/admin/tabs/agent/JobFinderTab.tsx
+//
+// Prompt editor for the job-finder workflow, plus its three behaviour
+// switches: maximum advert age, whether agencies and boards count at all,
+// and whether links are verified before display.
+
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";

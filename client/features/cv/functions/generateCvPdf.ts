@@ -1,3 +1,12 @@
+// client/features/cv/functions/generateCvPdf.ts
+//
+// Lays out a tailored CV as a downloadable PDF with jsPDF.
+//
+// Everything is positioned by hand in millimetres on A4, because the result
+// has to paginate predictably: the footer height is reserved up front and
+// each block checks whether it still fits before drawing, so a section
+// breaks onto a new page rather than over the footer.
+
 import jsPDF from "jspdf";
 import type { CvCustomiseResult } from "@/features/support/api/support";
 import crewDogLogo from "@/assets/CrewDog-App-Logo.png";

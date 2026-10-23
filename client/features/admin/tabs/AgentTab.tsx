@@ -1,3 +1,12 @@
+// client/features/admin/tabs/AgentTab.tsx
+//
+// Switches the four workflows on and off, and hosts the per-workflow prompt
+// editors beneath.
+//
+// A switch here decides whether the tool is advertised to the model at all,
+// which is what stops it being called. The Lusha toggle is the one with a
+// direct cost attached: it gates every paid contact reveal.
+
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { getSettings, saveSettings, type AgentConfig } from "@/features/admin/api/settings";

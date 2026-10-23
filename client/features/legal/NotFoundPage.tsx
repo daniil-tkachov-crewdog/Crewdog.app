@@ -1,3 +1,9 @@
+// client/features/legal/NotFoundPage.tsx
+//
+// The catch-all route. Logs the attempted path to the console, which is how
+// a broken internal link gets noticed — the server cannot see it, because a
+// client-side navigation never reaches it.
+
 import { useLocation } from "react-router-dom";
 import { useEffect } from "react";
 

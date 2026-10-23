@@ -1,3 +1,14 @@
+// client/features/admin/tabs/agent/ChatRoutingTab.tsx
+//
+// Edits how the chat model chooses between the workflows: the tool
+// descriptions, the argument descriptions, and the contracts that govern how
+// results and next-step suggestions come back.
+//
+// The defaults are imported from the server modules themselves, so the
+// placeholder text in this panel is always the text the server would
+// actually use. That import reaches across into server/ — one of the few
+// places the frontend does.
+
 import type { AgentConfig } from "@/features/admin/api/settings";
 import PromptField, { type SetCfg } from "@/features/admin/tabs/agent/PromptField";
 import {

@@ -1,3 +1,11 @@
+// client/features/billing/SuccessPage.tsx
+//
+// Where Stripe returns after a successful checkout.
+//
+// The subscription is not live the instant this renders — Stripe's webhook
+// decides that — so the page polls the account summary until the new plan
+// shows up rather than claiming success straight away.
+
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";

@@ -1,3 +1,9 @@
+// client/features/admin/tabs/agent/JobDescriptionTab.tsx
+//
+// Prompt editor for the job-description workflow — the four-stage one that
+// extracts the company from a pasted advert, verifies it, then X-rays
+// LinkedIn for HR contacts and connections. One field per stage.
+
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";

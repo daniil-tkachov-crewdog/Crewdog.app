@@ -1,3 +1,12 @@
+// client/features/admin/tabs/agent/PromptField.tsx
+//
+// One editable prompt: a labelled textarea that shows the built-in default
+// as its placeholder and lists the {{placeholders}} the app will fill in.
+//
+// An empty field means "use the default" rather than "send nothing", which
+// is why the default is shown rather than pre-filled — pre-filling would
+// freeze today's wording into the database.
+
 import { Textarea } from "@/components/ui/textarea";
 import type { AgentConfig } from "@/features/admin/api/settings";
 

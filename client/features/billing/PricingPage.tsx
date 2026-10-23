@@ -1,3 +1,8 @@
+// client/features/billing/PricingPage.tsx
+//
+// Plans and the checkout entry point. Public: it renders signed out, because
+// crawlers and prospective customers both need it.
+
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";

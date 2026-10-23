@@ -1,3 +1,13 @@
+// client/features/auth/AuthProvider.tsx
+//
+// Holds the session and exposes the auth actions to the whole app.
+//
+// It talks to an AuthAdapter rather than to Supabase directly, so the
+// provider itself carries no vendor API. `loading` matters: it is true until
+// the first session check resolves, and the route guards wait on it — acting
+// before then would bounce a signed-in user to the login page on every
+// refresh.
+
 import React from "react";
 import type { AuthAdapter, AuthUser } from "@/features/auth/auth.adapter";
 import { supabaseAuth } from "@/features/auth/adapters/supabase";

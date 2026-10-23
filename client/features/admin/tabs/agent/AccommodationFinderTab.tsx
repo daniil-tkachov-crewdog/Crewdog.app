@@ -1,3 +1,10 @@
+// client/features/admin/tabs/agent/AccommodationFinderTab.tsx
+//
+// Prompt editor for the accommodation workflow, plus its two behaviour
+// switches: how old a listing may be, and whether every surviving link is
+// opened before the user sees it. Defaults come from the server module, so
+// the placeholders match what would actually be sent.
+
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";

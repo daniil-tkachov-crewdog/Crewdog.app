@@ -1,3 +1,9 @@
+// client/features/account/components/SecuritySection.tsx
+//
+// Change-password panel. This one is live: it calls Supabase auth directly,
+// which is why it needs no API route — the user updates their own
+// credential with their own session.
+
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";

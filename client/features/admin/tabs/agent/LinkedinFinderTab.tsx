@@ -1,3 +1,8 @@
+// client/features/admin/tabs/agent/LinkedinFinderTab.tsx
+//
+// Prompt editor for the people-finder workflow — the one that searches from
+// a title and location rather than from a pasted advert.
+
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import type { AgentConfig } from "@/features/admin/api/settings";

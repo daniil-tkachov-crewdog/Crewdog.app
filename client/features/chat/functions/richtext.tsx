@@ -1,3 +1,7 @@
+// client/features/chat/functions/richtext.tsx
+//
+// Renders the model's reply text as React nodes.
+
 import React from "react";
 
 // Lightweight, dependency-free renderer for chat message text.

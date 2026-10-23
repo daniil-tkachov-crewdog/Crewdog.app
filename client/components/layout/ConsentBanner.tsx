@@ -1,3 +1,12 @@
+// client/components/layout/ConsentBanner.tsx
+//
+// The cookie banner. Shown only until a choice is stored, and the choice is
+// what gates Google Analytics (see core/analytics/consent).
+//
+// Our own page-view logging is deliberately not behind this: it is
+// first-party, server-side and IP-truncated, which is an access log rather
+// than tracking.
+
 import { useEffect, useState } from "react";
 import { grantAll, denyAll, readConsent } from "@/core/analytics/consent";
 

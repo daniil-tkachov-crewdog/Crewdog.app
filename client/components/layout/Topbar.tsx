@@ -1,3 +1,11 @@
+// client/components/layout/Topbar.tsx
+//
+// The dark marketing header, with the mobile menu. Shown on the public
+// pages; the chat screen draws its own chrome instead (see chrome.tsx).
+//
+// It reads the session only to decide between "Log in" and "My account" —
+// nothing here is a security boundary. The route guards are.
+
 import { Link, useLocation } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";

@@ -1,3 +1,9 @@
+// client/features/settings/SettingsPage.tsx
+//
+// Placeholder. /settings is routed and reachable but has no content yet; the
+// settings that do exist live on the account page. Kept so the route does
+// not 404 while the screen is built.
+
 import React from "react";
 
 const Settings: React.FC = () => {

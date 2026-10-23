@@ -1,3 +1,14 @@
+// client/features/chat/components/ResultCards.tsx
+//
+// Renders the workflow results that ride alongside a reply: people, jobs and
+// places, each as an unfolding card with the search's own summary above it.
+//
+// The shapes come from the server (see server/chatResults.js), which is what
+// keeps the card layout and the model's output contract in step. The contact
+// buttons are the only place in the UI that spends money — each reveal is a
+// billed Lusha lookup — so they are disabled unless the viewer is signed in
+// and the admin has switched the feature on.
+
 import React from "react";
 import { ArrowUpRight, Briefcase, ChevronDown, Home, Mail, Phone, Search } from "lucide-react";
 import {

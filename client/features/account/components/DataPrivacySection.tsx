@@ -1,3 +1,12 @@
+// client/features/account/components/DataPrivacySection.tsx
+//
+// The export-my-data and delete-my-account panel.
+//
+// Both buttons are presentational: they raise a toast and do nothing else.
+// There is no export job and no deletion request behind them yet, so the
+// copy promises an email that is not sent. Worth wiring up or removing
+// before anyone relies on it.
+
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Download, Shield, Trash2 } from "lucide-react";

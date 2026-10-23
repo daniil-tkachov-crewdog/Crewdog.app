@@ -1,3 +1,8 @@
+// client/features/billing/CancelPage.tsx
+//
+// Where Stripe returns when a checkout is abandoned. Nothing was charged and
+// nothing changed; the page exists so the return is not a dead end.
+
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";

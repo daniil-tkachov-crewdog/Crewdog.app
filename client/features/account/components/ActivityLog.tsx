@@ -1,3 +1,9 @@
+// client/features/account/components/ActivityLog.tsx
+//
+// Recent-activity list for the account screen, driven by the fixtures in
+// fixtures/account.mock.ts. Not currently rendered by AccountPage — there is
+// no activity feed behind it yet.
+
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import type { ActivityItem } from "@/features/account/fixtures/account.types";

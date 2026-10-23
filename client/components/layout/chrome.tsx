@@ -1,3 +1,13 @@
+// client/components/layout/chrome.tsx
+//
+// The two pieces of app chrome the product screens share: the wordmark and
+// the light/dark toggle.
+//
+// The wordmark is live text rather than an image, so it inherits the theme's
+// ink colour and stays sharp at any zoom. The toggle renders nothing until
+// mounted because the resolved theme is unknown during SSR-style hydration,
+// and guessing produces a visible flip on first paint.
+
 import React from "react";
 import { useTheme } from "next-themes";
 import { Sun, Moon } from "lucide-react";

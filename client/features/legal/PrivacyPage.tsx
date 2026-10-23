@@ -1,3 +1,8 @@
+// client/features/legal/PrivacyPage.tsx
+//
+// Privacy policy. Static copy, kept in the component rather than a CMS
+// because it changes rarely and should be reviewed in a diff when it does.
+
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { Wordmark, ThemeToggle } from "@/components/layout/chrome";

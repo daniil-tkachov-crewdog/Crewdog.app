@@ -1,3 +1,9 @@
+// client/features/billing/components/DownsellModal.tsx
+//
+// Offers a cheaper plan to a subscriber on the way out, before the
+// cancellation is confirmed. Shown only for the plans a downgrade exists
+// for; everyone else goes straight to the survey.
+
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";

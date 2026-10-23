@@ -1,3 +1,11 @@
+// client/features/account/components/NotificationsSection.tsx
+//
+// Notification preference switches.
+//
+// Local state only — nothing is persisted and no notifications are sent, so
+// the toggles reset on reload. Presentational until there is a preferences
+// table and a sender behind them.
+
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";

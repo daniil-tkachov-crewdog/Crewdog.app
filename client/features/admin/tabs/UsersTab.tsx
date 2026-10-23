@@ -1,3 +1,8 @@
+// client/features/admin/tabs/UsersTab.tsx
+//
+// Lists registered users straight from Supabase. Read-only: account changes
+// are made in Supabase or Stripe, not here.
+
 import { useEffect, useState } from "react";
 import { supabase } from "@/core/supabase/client";
 import {

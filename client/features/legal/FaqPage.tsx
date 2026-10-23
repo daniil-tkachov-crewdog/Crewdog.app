@@ -1,3 +1,9 @@
+// client/features/legal/FaqPage.tsx
+//
+// Public FAQ. The same questions are also published as FAQPage structured
+// data in the server-rendered head, where they are edited in the admin SEO
+// tab — these two lists are maintained separately.
+
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";

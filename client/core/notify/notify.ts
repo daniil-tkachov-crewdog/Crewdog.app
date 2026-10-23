@@ -1,3 +1,8 @@
+// client/core/notify/notify.ts
+//
+// One entry point for user-facing messages, so the toast library stays
+// replaceable and every call site reads the same.
+
 import { toast } from "sonner";
 
 export type NotifyKind = "success" | "error" | "info";

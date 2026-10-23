@@ -1,3 +1,12 @@
+// client/hooks/useToast.ts
+//
+// The shadcn toast store: a reducer plus a module-level listener list, so
+// toast() can be called from outside React and still reach the <Toaster />.
+//
+// Note TOAST_LIMIT = 1 — a new toast replaces the visible one rather than
+// stacking. Most of the app uses sonner (see core/notify) instead; this backs
+// the shadcn <Toaster /> that a few components still use.
+
 import * as React from "react";
 
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast";

@@ -1,3 +1,14 @@
+// server/agentPrompts.js
+//
+// The built-in prompts and limits for every workflow, and for the chat
+// model's routing between them.
+//
+// These are defaults, not the live values: each one is overridable in the
+// admin panel, and the editors there import this module so the placeholder
+// text they show is exactly what the server would otherwise send. That
+// import is also why this file is reachable from the browser bundle, so
+// nothing secret belongs in it.
+
 import { PROPERTY_EXPIRY_PHRASES } from "./linkCheck.js";
 
 // Default prompts and limits for both AI agent workflows.

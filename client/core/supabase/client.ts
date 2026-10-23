@@ -1,3 +1,13 @@
+// client/core/supabase/client.ts
+//
+// The browser's Supabase client, and the two reads the rest of the app needs
+// from a session.
+//
+// Exactly one client is created for the whole app: a second would keep its
+// own copy of the session and the two would drift apart after a refresh.
+// This holds the anon key only — every privileged operation goes through the
+// API, which has the service-role key and never exposes it.
+
 import { createClient } from "@supabase/supabase-js";
 import { env } from "@/core/config/env";
 

@@ -1,3 +1,15 @@
+// client/features/cv/functions/extractPdfText.ts
+//
+// Reads a PDF to text in the browser, for the chat composer's attach button.
+//
+// pdf.js is loaded from a CDN on first use rather than bundled: it is large,
+// and most sessions never attach a CV. The module promise is cached so a
+// second attachment does not fetch it again.
+//
+// The server has its own PDF reader (server/cvReader.js) for the account
+// page's upload, which keeps the file and fills the profile. This one keeps
+// nothing.
+
 const PDFJS_CDN_URL =
   "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs";
 const PDFJS_WORKER_CDN_URL =

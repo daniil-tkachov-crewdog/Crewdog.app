@@ -1,3 +1,11 @@
+// client/features/auth/ForgotPasswordPage.tsx
+//
+// Requests a password-reset email.
+//
+// It reports success whether or not the address has an account: saying
+// "no such user" would turn this form into a way to test which emails are
+// registered.
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";

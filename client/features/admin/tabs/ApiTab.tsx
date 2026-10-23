@@ -1,3 +1,11 @@
+// client/features/admin/tabs/ApiTab.tsx
+//
+// Model and feature switches, plus the token-spend readout.
+//
+// The model list is fetched live from /api/models so a newly released model
+// appears without a deploy. The usage figures are in input-equivalent units,
+// not raw tokens — see server/usage.js for why, and for the conversion.
+
 import { useEffect, useRef, useState } from "react";
 import {
   Select,

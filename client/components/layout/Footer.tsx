@@ -1,3 +1,12 @@
+// client/components/layout/Footer.tsx
+//
+// Site footer: the link columns, socials and legal line.
+//
+// Note the Product column still points at /run, which no longer exists and
+// lands on the 404 page — the Run screen was removed. Left as-is rather than
+// quietly repointed, because where it should go instead (/chat, or dropping
+// the row) is a content decision.
+
 import { Link } from "react-router-dom";
 import { Twitter, Linkedin, Mail } from "lucide-react";
 import { gaEvent } from "@/core/analytics/gtm";

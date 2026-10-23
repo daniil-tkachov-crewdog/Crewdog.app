@@ -1,3 +1,13 @@
+// client/features/account/api/account.ts
+//
+// Reads the billing summary and normalises it for the UI.
+//
+// The shape the billing backend returns has grown several spellings for the
+// same number — cap, searchCap, searches.cap, quota.cap — so
+// normalizeSummary() collapses them into one predictable object and infers
+// the plan from its Stripe price. Every component should read that, never
+// the raw response.
+
 import { API_BASE } from "@/core/config/config";
 import { getIdentity } from "@/core/supabase/client";
 

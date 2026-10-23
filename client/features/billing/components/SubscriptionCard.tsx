@@ -1,3 +1,12 @@
+// client/features/billing/components/SubscriptionCard.tsx
+//
+// The account page's plan panel: current plan, renewal date, remaining
+// searches, and the upgrade, renew and cancel actions.
+//
+// It reads the normalised summary rather than the raw billing response, so
+// the several spellings the backend has for "cap" are already resolved by
+// the time they reach here.
+
 import { useState } from "react";
 import type { AccountUser } from "@/features/account/types";
 import type { NormalizedSummary } from "@/features/account/types";

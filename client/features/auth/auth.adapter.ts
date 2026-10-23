@@ -1,3 +1,12 @@
+// client/features/auth/auth.adapter.ts
+//
+// The auth contract the app codes against.
+//
+// Everything the UI needs from authentication is listed here, in terms of
+// plain users and tokens rather than any provider's types. The Supabase
+// implementation is one folder down; keeping the seam means a provider
+// change touches that file and not the pages.
+
 export type AuthUser = {
   id: string;
   email: string | null;

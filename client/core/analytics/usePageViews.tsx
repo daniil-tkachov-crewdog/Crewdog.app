@@ -1,3 +1,8 @@
+// client/core/analytics/usePageViews.tsx
+//
+// Reports client-side navigations, to our own traffic log and to GA.
+//
+
 import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { gaPageview } from "@/core/analytics/gtm";

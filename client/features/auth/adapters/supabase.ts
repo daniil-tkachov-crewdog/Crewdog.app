@@ -1,3 +1,11 @@
+// client/features/auth/adapters/supabase.ts
+//
+// The Supabase implementation of AuthAdapter.
+//
+// The only module in the frontend that calls supabase.auth directly. It maps
+// Supabase's session shape onto the app's AuthUser, so nothing above it has
+// to know where `name` lives in user_metadata.
+
 import { supabase } from "@/core/supabase/client";
 import type { AuthAdapter, AuthSession, AuthUser } from "@/features/auth/auth.adapter";
 

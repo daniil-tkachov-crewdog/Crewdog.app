@@ -1,3 +1,7 @@
+// client/features/legal/TermsPage.tsx
+//
+// Terms of use. Static copy, for the same reason as the privacy policy.
+
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { Wordmark, ThemeToggle } from "@/components/layout/chrome";

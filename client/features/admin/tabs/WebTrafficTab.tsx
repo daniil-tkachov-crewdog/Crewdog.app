@@ -1,3 +1,12 @@
+// client/features/admin/tabs/WebTrafficTab.tsx
+//
+// The first-party visitor log: page views with truncated IP, coarse geo and
+// parsed user agent.
+//
+// Admin page views are not recorded, so reading this does not add to it.
+// Scanner probes are, deliberately, which is why /.git/HEAD and /wp-login.php
+// show up here.
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/core/supabase/client";
 import { Input } from "@/components/ui/input";

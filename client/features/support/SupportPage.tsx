@@ -1,3 +1,9 @@
+// client/features/support/SupportPage.tsx
+//
+// Public contact page. Wraps SupportForm in the standalone chrome, for
+// visitors who are not signed in; the same form also appears as a tab inside
+// the account screen.
+
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";

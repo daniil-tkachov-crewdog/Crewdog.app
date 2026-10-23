@@ -1,3 +1,9 @@
+// client/features/account/components/AchievementsGrid.tsx
+//
+// Badge grid for the account screen, driven by the fixtures in
+// fixtures/account.mock.ts. Not currently rendered by AccountPage — the
+// achievements section is designed but not wired up.
+
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { CheckCircle2 } from "lucide-react";

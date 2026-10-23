@@ -1,3 +1,17 @@
+// client/features/chat/ChatPage.tsx
+//
+// The chat screen: conversation list, message thread, result cards and the
+// composer (text, voice and CV attachment).
+//
+// It owns the turn: it posts to /api/chat, reads either the JSON body
+// (Normal mode) or the SSE stream (Pro mode, which also reports which skills
+// loaded), persists both sides of the exchange to Supabase, and carries the
+// loaded-skill slugs forward so a follow-up does not reload them.
+//
+// Still the largest file in the app at over a thousand lines. The
+// restructure notes break it into a page plus components, hooks and
+// functions; that split is not done yet.
+
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/features/auth/AuthProvider";
