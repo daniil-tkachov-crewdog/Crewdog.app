@@ -1,6 +1,12 @@
 # Crewdog.app — Codebase Restructure Proposal
 
-Status: proposal, nothing moved yet.
+Status: carried out. All eight phases below are done; see git history from
+`Remove unreachable code` to `Move the build config into config/`.
+Two things in it were deliberately not done, and say so where they appear:
+the six-stage workflow pipeline in §3.5 (replaced by one shared model-call
+stage — the reasoning is at the top of `server/workflows/runModelStage.js`),
+and the split of `ChatPage.tsx`, which was moved but not broken up.
+The result is documented in ARCHITECTURE.md, which is the file to read first.
 Date: 2026-10-23.
 Scope: the whole repository — Node/Express API, React SPA, SQL, config, docs.
 

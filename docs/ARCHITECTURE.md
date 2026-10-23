@@ -18,9 +18,28 @@ browser never needs CORS.
 ```
 client/    compiled by Vite into dist/
 server/    Node + Express; serves the API and dist/
-database/  SQL the Supabase CLI applies   (currently supabase/)
+config/    build tooling (Vite, Tailwind, PostCSS, ESLint, TypeScript)
+supabase/  migrations the Supabase CLI applies
 docs/      this
 ```
+
+### What is left at the root, and why
+
+Nine config files moved into `config/`. These six could not, because the tool
+that reads them only ever looks at the repository root:
+
+| File | Read by |
+|---|---|
+| `package.json`, `package-lock.json`, `bun.lockb` | npm |
+| `index.html` | Vite — it is the build's entry document, and `root` points here |
+| `render.yaml` | Render |
+| `vercel.json` | Vercel |
+| `tsconfig.json` | editors and a bare `tsc`; it is a two-line stub whose `references` point into `config/` |
+| `components.json` | the shadcn CLI |
+
+Moving anything in `config/` means re-checking the wiring in
+`config/vite.config.ts` and `config/postcss.config.js` — see the warning in
+*Known seams*.
 
 **The rule between them:** `client/` must not import from `server/`, and
 `server/` must never import from `client/`. There is one exception, and it is
@@ -171,6 +190,14 @@ These are real and deliberate, not oversights:
 4. **Two deploy targets.** `render.yaml` runs the whole thing; `vercel.json`
    builds a static site with no API behind it. Only the Render one is a
    complete deployment.
+5. **The build config is wired by hand, because it is not at the root.**
+   `config/vite.config.ts` states the project root, the `@` alias and the
+   PostCSS path explicitly, and `config/postcss.config.js` states Tailwind's
+   config path. Vite searches for a PostCSS config upward from the project
+   root and Tailwind looks in the working directory, so without those two
+   lines the build still succeeds and silently ships a stylesheet with no
+   Tailwind in it. If you touch either file, rebuild and check the CSS is
+   still around 120 KB rather than a few hundred bytes.
 
 ---
 

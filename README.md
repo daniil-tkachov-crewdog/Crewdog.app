@@ -56,9 +56,14 @@ and `/api/health` answers.
 
 ## Layout
 
-`client/` is the React app, `server/` the Express API, `supabase/migrations/`
-the schema. The server serves the built frontend, so production is one
-process.
+`client/` is the React app, `server/` the Express API, `config/` the build
+tooling and `supabase/migrations/` the schema. The server serves the built
+frontend, so production is one process.
+
+The root holds only what has to be there: `package.json` and the lockfiles,
+`index.html` (Vite's entry document), `render.yaml` and `vercel.json` (each
+platform reads its own from the root), `components.json` (the shadcn CLI) and
+a `tsconfig.json` stub pointing into `config/`. Everything else moved.
 
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is the full map — where each
 kind of file goes, how the four workflows differ, and the seams worth

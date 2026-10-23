@@ -1,8 +1,19 @@
+// config/tailwind.config.ts
+//
+// The design system: colours, fonts, radii and animations, plus which files
+// Tailwind scans for class names.
+
 import type { Config } from "tailwindcss";
 
 export default {
   darkMode: ["class"],
-  content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./client/**/*.{ts,tsx}"],
+  // Resolved against the working directory, which is the repository root —
+  // that is where every npm script runs from, and why this is still "./client"
+  // and not "../client". index.html is scanned for the classes on <body>.
+  //
+  // The ./pages, ./components and ./app globs that used to sit here matched
+  // nothing: no such directories exist at the root.
+  content: ["./client/**/*.{ts,tsx}", "./index.html"],
   prefix: "",
   theme: {
     container: {
